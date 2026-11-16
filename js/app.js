@@ -63,7 +63,7 @@
   /** Eingaben im Formular „Schritte aus einer Liste übernehmen“ (gehören nicht zur Map). */
   function leereListe() {
     // offen: null = automatisch (offen, solange es noch keine Schritte gibt); vorschau: ausgewertete Tabelle
-    return { text: '', als: 'aktion', phaseId: '', quelleId: '', offen: null, vorschau: null };
+    return { text: '', als: 'aktion', phaseId: '', quelleId: '', offen: null, vorschau: null, saetze: true, vorschlag: null };
   }
 
   /* ================= DOM-Hilfen ================= */
@@ -225,7 +225,10 @@
     };
     for (const [key, fn] of Object.entries(bereiche)) {
       const el = document.querySelector('[data-abgeleitet="' + key + '"]');
-      if (el) el.replaceChildren(...fn().filter(Boolean));
+      if (el) {
+        el.replaceChildren();
+        fuellen(el, fn());
+      }
     }
     const kurz = document.querySelectorAll('[data-schritt-kurz]');
     if (kurz.length) {
@@ -1324,7 +1327,7 @@
       ),
       sperrHinweis(),
       schnellErfassung(gesperrt),
-      listenFormular(gesperrt),
+      textFormular(gesperrt),
       ausfuellhilfe(),
       h('div', { class: 'auswahl-leiste', 'data-abgeleitet': 'auswahl' }),
       m.phasen.map((p, i) => phaseBlock(p, i, gesperrt, nummern)),
@@ -1352,183 +1355,338 @@
     );
   }
 
-  /** Vorschau, was aus dem Listen-Text entsteht, mit Warnung bei Fließtext. */
-  function listenVorschauInhalt(text) {
-    const eintraege = M.zeilenZuEintraegen(text);
-    if (!eintraege.length) return [h('p', { class: 'hilfe' }, 'Noch keine Zeilen. Jede Zeile wird ein eigener Schritt.')];
-    const n = Math.min(eintraege.length, M.MAX_LISTENSCHRITTE);
-    const lang = eintraege.filter((e) => e.length > 120).length;
-    const warnungen = [];
-    if (lang) {
-      warnungen.push(
-        mehrzahl(lang, 'Zeile ist', 'Zeilen sind') +
-          ' sehr lang. Das sieht nach Fließtext aus. Jede Zeile wird ein eigener Schritt. Für einzelne Schritte nutze besser oben „Neuer Schritt“.'
-      );
-    }
-    if (eintraege.length > 20) warnungen.push('Das sind viele Schritte. Prüfe, ob wirklich jede Zeile ein Schritt ist.');
-    if (eintraege.length > M.MAX_LISTENSCHRITTE) warnungen.push('Auf einmal werden höchstens ' + M.MAX_LISTENSCHRITTE + ' Schritte angelegt.');
-    return [
-      h('p', {}, h('strong', {}, n === 1 ? 'Daraus wird 1 Schritt:' : 'Daraus werden ' + n + ' Schritte:')),
-      warnungen.length ? h('div', { class: 'box box-warnung' }, warnungen.map((w) => h('p', {}, w))) : null,
-      h(
-        'ol',
-        { class: 'listen-vorschau' },
-        eintraege.slice(0, 5).map((e) => h('li', {}, kuerzen(e, 100)))
-      ),
-      eintraege.length > 5 ? h('p', { class: 'hilfe' }, '… und ' + (eintraege.length - 5) + ' weitere') : null,
-    ];
-  }
+  /* ---------- Mehrere Schritte auf einmal: Text oder Datei, Vorschlag prüfen, anlegen ---------- */
 
-  function listenKnopfText(text) {
-    const n = Math.min(M.zeilenZuEintraegen(text).length, M.MAX_LISTENSCHRITTE);
-    return n === 1 ? '1 Schritt anlegen' : n + ' Schritte anlegen';
-  }
+  const TEXT_PLATZHALTER =
+    'Text einfügen oder Datei hierher ziehen, zum Beispiel:\n\n' +
+    'Kontakt aufnehmen:\n- Ruft die Service-Hotline an\n- Hört die Begrüßung des Voicebots\nProblem: Erwartet eine Person\n\n' +
+    'Oder einfach Fließtext: Die Kundin ruft an. Sie nennt ihr Anliegen …';
 
-  /** „Mehrere Schritte auf einmal übernehmen“: aus einer Datei oder als Liste. Standardmäßig zugeklappt. */
-  function listenFormular(gesperrt) {
-    if (gesperrt) return null;
-    const m = zustand.map;
-    const liste = zustand.liste;
-    if (!m.phasen.some((p) => p.id === liste.phaseId)) liste.phaseId = m.phasen.length ? m.phasen[0].id : '';
-    if (liste.quelleId && !m.quellen.some((q) => q.id === liste.quelleId)) liste.quelleId = '';
-    const vorschau = h('div', { class: 'listen-vorschau-bereich', id: 'f-liste-vorschau', 'aria-live': 'polite' }, listenVorschauInhalt(liste.text));
-    const knopf = h('button', { type: 'button', class: 'primaer', id: 'btn-liste-anlegen', onclick: listeUebernehmen }, listenKnopfText(liste.text));
-    knopf.disabled = !M.zeilenZuEintraegen(liste.text).length;
-    const alsOptionen = [
-      ['aktion', 'Aktion: was die Kund*in tut'],
-      ['intern', 'Interner Ablauf: was bei uns oder im System passiert'],
-    ];
-    const details = h(
+  function erkennungsHilfe() {
+    return h(
       'details',
-      { class: 'karte', id: 'liste-formular', open: liste.offen === true },
-      h('summary', {}, 'Mehrere Schritte auf einmal übernehmen (aus einer Datei oder Liste)'),
-      dateiBereich(),
-      h('h4', { class: 'abschnitt' }, 'Als Liste einfügen'),
+      { class: 'mehr-felder' },
+      h('summary', {}, 'So erkennt die Vorlage deinen Text'),
       h(
-        'p',
+        'ul',
         { class: 'hilfe' },
-        'Für eine Liste von Prozessschritten, nicht für Fließtext: Jede Zeile wird ein eigener Schritt. Aufzählungszeichen und Nummern werden entfernt.'
+        h('li', {}, 'Jede Zeile, jeder Aufzählungspunkt und jeder Satz wird ein Schritt. Auch „→“, „;“, „1. … 2. …“ und „…, dann …“ trennen.'),
+        h('li', {}, 'Überschriften werden Phasen: eine kurze Zeile mit Doppelpunkt am Ende („Kontakt aufnehmen:“), „# Überschrift“ oder Überschriften aus Word.'),
+        h(
+          'li',
+          {},
+          'Zeilen, die mit „Problem:“, „Touchpoint:“, „Gedanke:“, „Zitat:“, „Emotion:“ oder „Intern:“ beginnen, gehören zum Schritt davor. Sätze mit „Leider …“ werden Pain Points, „Sie ist genervt, weil …“ wird Emotion und Pain Point.'
+        ),
+        h('li', {}, 'Touchpoint und Emotion schlägt die Vorlage anhand von Wörtern vor, z. B. „ruft an“ → Telefon, „genervt“ → negativ.'),
+        h('li', {}, 'Excel- und CSV-Tabellen mit Spaltenüberschriften (siehe Tabellenvorlage) werden Zeile für Zeile übernommen.')
+      )
+    );
+  }
+
+  function vorschlagAktiv(v) {
+    return v ? v.gruppen.reduce((n, g) => n + g.schritte.filter((s) => s.aktiv).length, 0) : 0;
+  }
+
+  function vorschlagKnopfAktualisieren() {
+    const knopf = document.getElementById('btn-vorschlag-anlegen');
+    if (!knopf) return;
+    const n = Math.min(vorschlagAktiv(zustand.liste.vorschlag), M.MAX_LISTENSCHRITTE);
+    knopf.textContent = n === 1 ? '1 Schritt anlegen' : n + ' Schritte anlegen';
+    knopf.disabled = !n;
+  }
+
+  function vorschlagNeu() {
+    const liste = zustand.liste;
+    liste.vorschlag = liste.text.trim() ? I.textZuVorschlag(liste.text, { saetze: liste.saetze }) : null;
+    renderVorschlag();
+  }
+
+  function renderVorschlag(fokusId) {
+    const el = document.getElementById('text-vorschlag');
+    if (el) {
+      el.replaceChildren();
+      fuellen(el, vorschlagInhalt());
+    }
+    if (fokusId) fokussieren(fokusId, 'nearest');
+  }
+
+  function vorschlagSchritte() {
+    return zustand.liste.vorschlag.gruppen.flatMap((g) => g.schritte);
+  }
+
+  function vorschlagZusammenfuehren(schritt) {
+    const alle = vorschlagSchritte();
+    const i = alle.indexOf(schritt);
+    if (i < 1) return;
+    const vorher = alle[i - 1];
+    vorher.aktion = [vorher.aktion, schritt.aktion].filter(Boolean).join(', ');
+    if (!vorher.touchpoint) {
+      vorher.touchpoint = schritt.touchpoint;
+      vorher.touchpointVorschlag = schritt.touchpointVorschlag;
+    }
+    if (vorher.emotion === null) vorher.emotion = schritt.emotion;
+    vorher.painPoints = vorher.painPoints.concat(schritt.painPoints);
+    for (const k of ['gedanken', 'zitat', 'intern']) vorher[k] = [vorher[k], schritt[k]].filter(Boolean).join(' ');
+    for (const g of zustand.liste.vorschlag.gruppen) g.schritte = g.schritte.filter((s) => s !== schritt);
+    renderVorschlag('v-aktion-' + vorher.id);
+  }
+
+  function vorschlagEntfernen(schritt) {
+    const alle = vorschlagSchritte();
+    const naechster = alle[alle.indexOf(schritt) + 1] || alle[alle.indexOf(schritt) - 1];
+    for (const g of zustand.liste.vorschlag.gruppen) g.schritte = g.schritte.filter((s) => s !== schritt);
+    renderVorschlag(naechster ? 'v-aktion-' + naechster.id : 'f-liste-text');
+  }
+
+  function vorschlagZeile(s, nr, erster) {
+    const aktiv = h('input', { type: 'checkbox', id: 'v-aktiv-' + s.id, checked: s.aktiv, 'aria-label': 'Schritt ' + nr + ' übernehmen' });
+    const zeile = h('li', { class: 'vorschlag-zeile' + (s.aktiv ? '' : ' aus') });
+    aktiv.addEventListener('change', () => {
+      s.aktiv = aktiv.checked;
+      zeile.classList.toggle('aus', !s.aktiv);
+      vorschlagKnopfAktualisieren();
+    });
+    const aktion = h('input', { type: 'text', id: 'v-aktion-' + s.id, class: 'v-aktion', autocomplete: 'off', 'aria-label': 'Schritt ' + nr + ': Was tut die Person?', placeholder: 'Was tut die Person?' });
+    aktion.value = s.aktion;
+    aktion.addEventListener('input', () => {
+      s.aktion = aktion.value;
+    });
+    const tp = h('input', {
+      type: 'text',
+      class: 'v-tp' + (s.touchpointVorschlag ? ' vorschlag' : ''),
+      autocomplete: 'off',
+      'aria-label': 'Schritt ' + nr + ': Touchpoint',
+      placeholder: 'Touchpoint',
+      title: s.touchpointVorschlag ? 'Vorschlag, bitte prüfen' : null,
+    });
+    tp.value = s.touchpoint;
+    tp.addEventListener('input', () => {
+      s.touchpoint = tp.value;
+      s.touchpointVorschlag = false;
+      tp.classList.remove('vorschlag');
+    });
+    const emo = h(
+      'select',
+      { class: 'v-emo' + (s.emotionVorschlag ? ' vorschlag' : ''), 'aria-label': 'Schritt ' + nr + ': Emotion', title: s.emotionVorschlag ? 'Vorschlag, bitte prüfen' : null },
+      h('option', { value: '' }, 'Emotion –'),
+      M.EMOTIONEN.map((e) => h('option', { value: String(e.wert) }, e.symbol + ' ' + e.label))
+    );
+    emo.value = s.emotion === null ? '' : String(s.emotion);
+    emo.addEventListener('change', () => {
+      s.emotion = emo.value === '' ? null : Number(emo.value);
+      s.emotionVorschlag = false;
+      emo.classList.remove('vorschlag');
+    });
+    const extras = [
+      s.painPoints.length ? h('span', { class: 'v-extra pp', title: s.painPoints.join(' · ') }, 'Pain Point: ' + kuerzen(s.painPoints.join(' · '), 80)) : null,
+      s.gedanken ? h('span', { class: 'v-extra', title: s.gedanken }, 'Gedanke: ' + kuerzen(s.gedanken, 60)) : null,
+      s.zitat ? h('span', { class: 'v-extra', title: s.zitat }, 'Zitat: ' + kuerzen(s.zitat, 60)) : null,
+      s.intern ? h('span', { class: 'v-extra', title: s.intern }, 'Intern: ' + kuerzen(s.intern, 60)) : null,
+    ].filter(Boolean);
+    fuellen(
+      zeile,
+      aktiv,
+      h('span', { class: 'sz-nr' }, String(nr)),
+      aktion,
+      tp,
+      emo,
+      h(
+        'span',
+        { class: 'werkzeuge' },
+        erster
+          ? null
+          : h(
+              'button',
+              { type: 'button', class: 'symbol', title: 'Mit dem Schritt davor zusammenführen', 'aria-label': 'Schritt ' + nr + ' mit dem Schritt davor zusammenführen', onclick: () => vorschlagZusammenfuehren(s) },
+              '⤒'
+            ),
+        h('button', { type: 'button', class: 'symbol gefahr', title: 'Entfernen', 'aria-label': 'Schritt ' + nr + ' entfernen', onclick: () => vorschlagEntfernen(s) }, '✕')
       ),
-      feld({
-        id: 'f-liste-text',
-        label: 'Liste (ein Schritt pro Zeile)',
-        typ: 'textarea',
-        zeilen: 6,
-        wert: liste.text,
-        onInput: (v) => {
-          liste.text = v;
-          vorschau.replaceChildren(...listenVorschauInhalt(v).filter(Boolean));
-          knopf.textContent = listenKnopfText(v);
-          knopf.disabled = !M.zeilenZuEintraegen(v).length;
-        },
-      }),
-      vorschau,
+      extras.length ? h('span', { class: 'v-extras' }, extras) : null
+    );
+    return zeile;
+  }
+
+  function radioGruppe(legende, name, optionen, wert, beiWechsel) {
+    return h(
+      'fieldset',
+      { class: 'feld' },
+      h('legend', {}, legende),
+      optionen.map(([w, label]) => {
+        const id = name + '-' + w;
+        const r = h('input', { type: 'radio', name, id, value: String(w), checked: wert === w });
+        r.addEventListener('change', () => beiWechsel(w, id));
+        return h('div', { class: 'checkbox-feld' }, r, h('label', { for: id }, label));
+      })
+    );
+  }
+
+  function vorschlagInhalt() {
+    const liste = zustand.liste;
+    const m = zustand.map;
+    const v = liste.vorschlag;
+    if (!liste.text.trim()) return [];
+    const gesamt = v ? vorschlagSchritte().length : 0;
+    if (!gesamt) return [h('p', { class: 'hilfe' }, 'In diesem Text wurden keine Schritte gefunden.')];
+    const phasenNamen = v.gruppen.filter((g) => g.phase && g.schritte.length).length;
+    const ohneUeberschrift = v.gruppen.some((g) => !g.phase && g.schritte.length);
+    const lang = vorschlagSchritte().filter((s) => s.aktion.length > 120).length;
+    const warnungen = [];
+    if (lang) warnungen.push(mehrzahl(lang, 'Schritt ist', 'Schritte sind') + ' sehr lang. Kürze sie oder trenne den Text feiner.');
+    if (gesamt > 40) warnungen.push('Das sind sehr viele Schritte. Eine Journey Map ist meist mit 8 bis 20 Schritten gut lesbar. Fasse ähnliche Schritte zusammen.');
+    if (gesamt > M.MAX_LISTENSCHRITTE) warnungen.push('Auf einmal werden höchstens ' + M.MAX_LISTENSCHRITTE + ' Schritte angelegt.');
+    let nr = 0;
+    const knopf = h('button', { type: 'button', class: 'primaer', id: 'btn-vorschlag-anlegen', onclick: vorschlagAnlegen }, '');
+    const teile = [
+      h('h4', { class: 'abschnitt', id: 'h-vorschlag', tabindex: '-1' }, 'Vorschlag: ' + mehrzahl(gesamt, 'Schritt', 'Schritte') + (phasenNamen ? ' in ' + mehrzahl(phasenNamen, 'Phase', 'Phasen') : '')),
+      h('p', { class: 'hilfe' }, 'Prüfe den Vorschlag: Texte ändern, Schritte zusammenführen (⤒), abwählen oder entfernen. Hellblau markierte Touchpoints und Emotionen sind Vorschläge.'),
       h(
         'div',
-        { class: 'raster' },
-        h(
-          'fieldset',
-          { class: 'feld' },
-          h('legend', {}, 'Zeilen übernehmen als'),
-          alsOptionen.map(([wert, label]) => {
-            const id = 'f-liste-als-' + wert;
-            const radio = h('input', { type: 'radio', name: 'f-liste-als', id, value: wert, checked: liste.als === wert });
-            radio.addEventListener('change', () => {
-              liste.als = wert;
-            });
-            return h('div', { class: 'checkbox-feld' }, radio, h('label', { for: id }, label));
-          })
-        ),
+        { class: 'vorschlag-optionen' },
+        radioGruppe('Trennen nach', 'f-trennen', [[true, 'Zeilen und Sätzen'], [false, 'nur Zeilen']], liste.saetze, (w, id) => {
+          liste.saetze = w;
+          vorschlagNeu();
+          fokussieren(id, 'nearest');
+        }),
+        radioGruppe('Der Text beschreibt', 'f-als', [['aktion', 'was die Kund*in tut'], ['intern', 'was intern passiert']], liste.als, (w) => {
+          liste.als = w;
+        }),
         h(
           'div',
           {},
-          feld({
-            id: 'f-liste-phase',
-            label: 'In Phase',
-            typ: 'select',
-            leerOption: false,
-            wert: liste.phaseId,
-            optionen: m.phasen.map((p, i) => ({ wert: p.id, label: 'Phase ' + (i + 1) + ': ' + phasenName(p) })),
-            onInput: (v) => {
-              liste.phaseId = v;
-            },
-          }),
+          ohneUeberschrift && m.phasen.length
+            ? feld({
+                id: 'f-liste-phase',
+                label: 'Schritte ohne Überschrift in',
+                typ: 'select',
+                leerOption: false,
+                wert: liste.phaseId,
+                optionen: m.phasen.map((p, i) => ({ wert: p.id, label: 'Phase ' + (i + 1) + ': ' + phasenName(p) })),
+                onInput: (w) => {
+                  liste.phaseId = w;
+                },
+              })
+            : null,
           feld({
             id: 'f-liste-quelle',
-            label: 'Quelle für alle Schritte',
+            label: 'Quelle für alle',
             optional: true,
             typ: 'select',
             wert: liste.quelleId,
             optionen: quellenOptionen(),
             leerText: '– keine –',
-            onInput: (v) => {
-              liste.quelleId = v;
+            onInput: (w) => {
+              liste.quelleId = w;
             },
           })
         )
       ),
-      m.phasen.length ? knopf : h('p', { class: 'hilfe' }, 'Lege zuerst unten eine Phase an.')
-    );
-    details.addEventListener('toggle', () => {
-      liste.offen = details.open;
-    });
-    return details;
+      warnungen.length ? h('div', { class: 'box box-warnung' }, warnungen.map((w) => h('p', {}, w))) : null,
+      v.gruppen
+        .filter((g) => g.schritte.length)
+        .map((g) => {
+          const kopf = g.phase
+            ? (() => {
+                const eingabe = h('input', { type: 'text', class: 'vorschlag-phase', autocomplete: 'off', 'aria-label': 'Name der Phase' });
+                eingabe.value = g.phase;
+                eingabe.addEventListener('input', () => {
+                  g.phase = eingabe.value;
+                });
+                return h('div', { class: 'vorschlag-kopf' }, h('span', { class: 'phase-nr' }, 'Phase'), eingabe);
+              })()
+            : h('div', { class: 'vorschlag-kopf' }, h('span', { class: 'phase-nr' }, 'Ohne Überschrift'));
+          return h(
+            'section',
+            { class: 'vorschlag-gruppe' },
+            kopf,
+            h(
+              'ol',
+              { class: 'vorschlag-liste' },
+              g.schritte.map((s) => {
+                nr += 1;
+                return vorschlagZeile(s, nr, nr === 1);
+              })
+            )
+          );
+        }),
+      h(
+        'div',
+        { class: 'knopf-reihe' },
+        knopf,
+        h(
+          'button',
+          {
+            type: 'button',
+            onclick: () => {
+              liste.text = '';
+              liste.vorschlag = null;
+              renderAktivenTab('f-liste-text');
+            },
+          },
+          'Text leeren'
+        )
+      ),
+    ];
+    const n = Math.min(vorschlagAktiv(v), M.MAX_LISTENSCHRITTE);
+    knopf.textContent = n === 1 ? '1 Schritt anlegen' : n + ' Schritte anlegen';
+    knopf.disabled = !n;
+    return teile;
   }
 
-  function listeUebernehmen() {
+  /** „Mehrere Schritte auf einmal übernehmen“: Text einfügen oder Datei hineinziehen. */
+  function textFormular(gesperrt) {
+    if (gesperrt) return null;
     const m = zustand.map;
     const liste = zustand.liste;
-    const eintraege = M.zeilenZuEintraegen(liste.text);
-    if (!eintraege.length) {
-      melden('Die Liste ist leer. Füge mindestens eine Zeile ein.', true);
-      fokussieren('f-liste-text');
-      return;
-    }
-    if (!m.phasen.some((p) => p.id === liste.phaseId)) {
-      melden('Bitte zuerst eine Phase anlegen und auswählen.', true);
-      return;
-    }
-    let neu = [];
-    const als = liste.als;
-    mitRueckgaengig(
-      () =>
-        mehrzahl(neu.length, 'Schritt', 'Schritte') +
-        ' aus der Liste angelegt' +
-        (eintraege.length > neu.length ? ' (die ersten ' + neu.length + ' von ' + eintraege.length + ' Zeilen)' : '') +
-        '. Ergänze jetzt ' +
-        (als === 'intern' ? 'die Aktion aus Sicht der Kund*innen, ' : '') +
-        'Touchpoint und Emotion.',
-      () => {
-        neu = M.schritteAusListe(m, { text: liste.text, als, phaseId: liste.phaseId, quelleId: liste.quelleId });
-        liste.text = '';
-        liste.offen = false;
-        zustand.alleZeigen = true;
-      }
-    );
-    fokussieren('h-schritt-' + neu[0].id);
-  }
+    if (!m.phasen.some((p) => p.id === liste.phaseId)) liste.phaseId = m.phasen.length ? m.phasen[0].id : '';
+    if (liste.quelleId && !m.quellen.some((q) => q.id === liste.quelleId)) liste.quelleId = '';
+    if (liste.text.trim() && !liste.vorschlag) liste.vorschlag = I.textZuVorschlag(liste.text, { saetze: liste.saetze });
 
-  /* ---------- Schritte aus einer Datei ---------- */
+    const textfeld = h('textarea', {
+      id: 'f-liste-text',
+      class: 'ablage',
+      rows: '8',
+      placeholder: TEXT_PLATZHALTER,
+      'aria-describedby': 'f-liste-text-hilfe',
+    });
+    textfeld.value = liste.text;
+    let warten = null;
+    textfeld.addEventListener('input', () => {
+      liste.text = textfeld.value;
+      window.clearTimeout(warten);
+      warten = window.setTimeout(vorschlagNeu, 300);
+    });
+    const hatDateien = (e) => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
+    textfeld.addEventListener('dragover', (e) => {
+      if (!hatDateien(e)) return;
+      e.preventDefault();
+      textfeld.classList.add('ziehen');
+    });
+    textfeld.addEventListener('dragleave', () => textfeld.classList.remove('ziehen'));
+    textfeld.addEventListener('drop', (e) => {
+      textfeld.classList.remove('ziehen');
+      const datei = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (!datei) return;
+      e.preventDefault();
+      dateiVerarbeiten(datei);
+    });
 
-  function dateiBereich() {
-    const liste = zustand.liste;
-    return h(
-      'div',
-      { class: 'datei-bereich' },
-      h('h4', { class: 'abschnitt' }, 'Aus einer Datei'),
-      h('p', { class: 'hilfe' }, 'Die Datei wird nur in deinem Browser gelesen. Sie wird nicht hochgeladen und nicht gespeichert.'),
+    const details = h(
+      'details',
+      { class: 'karte', id: 'liste-formular', open: liste.offen === null ? !m.schritte.length : liste.offen },
+      h('summary', {}, 'Mehrere Schritte auf einmal übernehmen'),
       h(
-        'ul',
-        { class: 'hilfe' },
-        h(
-          'li',
-          {},
-          h('strong', {}, 'Excel oder CSV: '),
-          'eine Zeile je Schritt, mit Spaltenüberschriften wie in der Vorlage (Phase, Aktion, Touchpoint, Emotion, Pain Points, Interner Ablauf, Quelle …). Andere Spalten werden nicht übernommen.'
-        ),
-        h('li', {}, h('strong', {}, 'Word: '), 'eine Tabelle mit einer Spalte „Aktion“ oder „Prozessschritt“, sonst die Aufzählungspunkte.'),
-        h('li', {}, h('strong', {}, 'Text: '), 'ein Schritt pro Zeile.'),
-        h('li', {}, h('strong', {}, 'PDF: '), 'Text kopieren und unten als Liste einfügen.')
+        'p',
+        {},
+        'Füge deinen Text ein oder zieh eine Datei hinein: Liste, Stichpunkte, Notizen oder Fließtext. Die Vorlage trennt ihn in Schritte, du prüfst den Vorschlag, bevor etwas angelegt wird.'
+      ),
+      erkennungsHilfe(),
+      h('label', { for: 'f-liste-text', class: 'feld-titel' }, 'Text oder Datei'),
+      textfeld,
+      h(
+        'p',
+        { class: 'hilfe', id: 'f-liste-text-hilfe' },
+        'Word, Excel, CSV oder Text hierher ziehen oder über „Datei auswählen“. Alles bleibt in deinem Browser. Keine Rohdaten, Gesprächsmitschriften oder Namen.'
       ),
       h(
         'div',
@@ -1536,9 +1694,40 @@
         h('button', { type: 'button', id: 'f-import-datei', onclick: () => document.getElementById('import-datei').click() }, 'Datei auswählen …'),
         h('button', { type: 'button', onclick: vorlageHerunterladen }, 'Tabellenvorlage herunterladen')
       ),
-      liste.vorschau ? vorschauBereich(liste.vorschau) : null
+      liste.vorschau ? vorschauBereich(liste.vorschau) : null,
+      h('div', { id: 'text-vorschlag', class: 'text-vorschlag', 'aria-live': 'polite' }, vorschlagInhalt().filter(Boolean))
     );
+    details.addEventListener('toggle', () => {
+      liste.offen = details.open;
+    });
+    return details;
   }
+
+  function vorschlagAnlegen() {
+    const liste = zustand.liste;
+    const v = liste.vorschlag;
+    if (!v || !vorschlagAktiv(v)) return;
+    let erg = null;
+    mitRueckgaengig(
+      () =>
+        mehrzahl(erg.schritte.length, 'Schritt', 'Schritte') +
+        ' angelegt' +
+        (erg.neuePhasen.length ? ', neue Phasen: ' + erg.neuePhasen.join(', ') : '') +
+        '.' +
+        (erg.ueberzaehlig ? ' ' + mehrzahl(erg.ueberzaehlig, 'weiterer Schritt wurde', 'weitere Schritte wurden') + ' nicht angelegt (höchstens ' + M.MAX_LISTENSCHRITTE + ').' : '') +
+        ' Touchpoint und Emotion waren Vorschläge, bitte kurz prüfen.',
+      () => {
+        erg = I.vorschlagUebernehmen(zustand.map, v, { phaseId: liste.phaseId, als: liste.als, quelleId: liste.quelleId });
+        liste.text = '';
+        liste.vorschlag = null;
+        liste.offen = false;
+        zustand.alleZeigen = true;
+      }
+    );
+    if (erg.schritte.length) fokussieren('h-schritt-' + erg.schritte[0].id, 'nearest');
+  }
+
+  /* ---------- Schritte aus einer Datei ---------- */
 
   function emotionVorschau(text) {
     if (!text) return '—';
@@ -1625,11 +1814,15 @@
     );
   }
 
-  async function importDateiGewaehlt(e) {
+  function importDateiGewaehlt(e) {
     const eingabe = e.target;
     const datei = eingabe.files && eingabe.files[0];
     eingabe.value = '';
-    if (!datei) return;
+    if (datei) dateiVerarbeiten(datei);
+  }
+
+  /** Datei aus „Datei auswählen“ oder per Hineinziehen: Tabelle → Vorschau, sonst Text → Vorschlag. */
+  async function dateiVerarbeiten(datei) {
     let auswertung;
     try {
       auswertung = await I.dateiAuswerten(datei.name, await datei.arrayBuffer());
@@ -1648,21 +1841,15 @@
       renderAktivenTab('h-vorschau');
       return;
     }
-    if (!auswertung.zeilen.length) {
+    if (!auswertung.text.trim()) {
       melden('In „' + datei.name + '“ wurde kein Text gefunden.', true);
       return;
     }
     liste.vorschau = null;
-    liste.text = auswertung.zeilen.join('\n');
-    renderAktivenTab('f-liste-text');
-    melden(
-      mehrzahl(auswertung.zeilen.length, 'Zeile', 'Zeilen') +
-        ' aus „' +
-        datei.name +
-        '“ in die Liste übernommen' +
-        (auswertung.hinweis ? ' (' + auswertung.hinweis + ')' : '') +
-        '. Prüfe die Liste, lösche überflüssige Zeilen und lege dann die Schritte an.'
-    );
+    liste.text = auswertung.text;
+    liste.vorschlag = I.textZuVorschlag(liste.text, { saetze: liste.saetze });
+    renderAktivenTab('h-vorschlag');
+    melden('Text aus „' + datei.name + '“ übernommen' + (auswertung.hinweis ? ' (' + auswertung.hinweis + ')' : '') + '. Prüfe den Vorschlag.');
   }
 
   function vorschauVerwerfen() {

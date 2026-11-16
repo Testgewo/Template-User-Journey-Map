@@ -16,7 +16,7 @@ Anforderungen: `docs/rahmendaten.md` (Canvas mit Auslöser, Rollen, Schritten, �
 - `js/model.js`: Datenmodell, Versionen, Status-Ablauf, JSON laden/speichern. Ohne DOM, auch in Node nutzbar.
 - `js/checks.js`: Prüfregeln (fehlt / Rückfrage / Hinweis), Erkennung möglicher Personendaten.
 - `js/beispiel.js`: fiktives Voicebot-Beispiel und Ausfüllhilfe.
-- `js/import.js`: Schritte aus Dateien (.xlsx, .csv, .docx, .txt). Bewusst ohne Fremdbibliothek: ZIP über die eingebaute `DecompressionStream`, XML per Muster (läuft so auch in Node-Tests). Größenlimits gegen ZIP-Bomben. Testdateien in `tests/fixtures/` (erzeugt mit `erzeugen.py`, braucht openpyxl und python-docx).
+- `js/import.js`: Schritte aus Text und Dateien. `textZuVorschlag()` trennt beliebigen Text regelbasiert in Phasen und Schritte (Zeilen, Sätze, Nummern, Pfeile, Überschriften, Zusätze wie „Problem:“, Vorschläge für Touchpoint und Emotion), `vorschlagUebernehmen()` legt sie an. Dateien (.xlsx, .csv, .docx, .txt): Tabellen mit Kopfzeile direkt, sonst als Text in den Vorschlag. Bewusst ohne Fremdbibliothek: ZIP über die eingebaute `DecompressionStream`, XML per Muster (läuft so auch in Node-Tests). Größenlimits gegen ZIP-Bomben. Testdateien in `tests/fixtures/` (erzeugt mit `erzeugen.py`, braucht openpyxl und python-docx).
 - `js/app.js`: Oberfläche (Reiter, Formulare, Map, Druck).
 - `css/app.css`: Design-Tokens, Hell/Dunkel, Druckansicht (A3 quer).
 - `index.html`: lokale Fassung (Doppelklick, eigene CSP). `artifact.html`: Fassung für claude.ai ohne Seitenrahmen (doctype/head/body ergänzt claude.ai), startet mit dem Beispiel (`data-start="beispiel"`). Seitengerüst in beiden Dateien gleich halten.

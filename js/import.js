@@ -268,10 +268,12 @@
       const text = absatzText(p[1]);
       if (!text) continue;
       const stil = (/<w:pStyle w:val="([^"]*)"/.exec(p[1]) || [])[1] || '';
+      const ebene = /title|titel/i.test(stil) ? 0 : Number((/(?:heading|berschrift)\s*(\d)/i.exec(stil) || [])[1] || 0) || null;
       absaetze.push({
         text,
         liste: /<w:numPr>/.test(p[1]) || /list|liste|aufz/i.test(stil),
         ueberschrift: /heading|berschrift|title|titel/i.test(stil),
+        ebene: ebene === null ? 9 : ebene,
       });
     }
     return absaetze;
@@ -403,8 +405,9 @@
     return { art: 'tabelle', herkunft, spalten, ignoriert: kopf.ignoriert, datensaetze };
   }
 
-  function alsListe(eintraege, hinweis) {
-    return { art: 'liste', zeilen: Modell.zeilenZuEintraegen(eintraege.join('\n')), hinweis: hinweis || '' };
+  /** Text für das Textfeld „Mehrere Schritte“, dort wird er in Schritte getrennt. */
+  function alsText(eintraege, hinweis) {
+    return { art: 'text', text: eintraege.map((e) => String(e || '').trim()).filter(Boolean).join('\n'), hinweis: hinweis || '' };
   }
 
   /** Tabelle mit Kopfzeile, sonst die erste Spalte als Liste. */
@@ -412,7 +415,7 @@
     const kopf = kopfzeileFinden(zeilen);
     if (kopf) return alsTabelle(zeilen, kopf, herkunft);
     const mehrspaltig = zeilen.some((z) => z.slice(1).some((w) => String(w).trim()));
-    return alsListe(
+    return alsText(
       zeilen.map((z) => String(z[0] || '')),
       mehrspaltig ? 'Keine bekannten Spaltenüberschriften gefunden, übernommen wurde die erste Spalte' : ''
     );
@@ -436,17 +439,24 @@
         if (kopf) return alsTabelle(tabelle, kopf, 'Word-Tabelle');
       }
       const absaetze = docxAbsaetze(xml.replace(/<w:tbl\b[\s\S]*?<\/w:tbl>/g, ''));
-      const listenpunkte = absaetze.filter((a) => a.liste);
-      if (listenpunkte.length >= 2) {
-        return alsListe(
-          listenpunkte.map((a) => a.text),
-          'Übernommen wurden die Aufzählungspunkte'
-        );
+      // Dokumenttitel weglassen: Titel-Stil oder einzige oberste Überschrift am Anfang
+      const ueberschriften = absaetze.filter((a) => a.ueberschrift);
+      const oberste = Math.min(...ueberschriften.map((a) => a.ebene));
+      const istTitel = (a) =>
+        a.ebene === 0 ||
+        (a === absaetze[0] && ueberschriften.filter((u) => u.ebene === oberste).length === 1 && (ueberschriften.length === 1 || ueberschriften.some((u) => u.ebene > oberste)));
+      const nurListe = absaetze.filter((a) => a.liste).length >= 2;
+      const zeilen = [];
+      for (const a of absaetze) {
+        if (a.ueberschrift) {
+          if (!istTitel(a)) zeilen.push('# ' + a.text);
+        } else if (a.liste) {
+          zeilen.push('- ' + a.text);
+        } else if (!nurListe) {
+          zeilen.push(a.text);
+        }
       }
-      return alsListe(
-        absaetze.filter((a) => !a.ueberschrift).map((a) => a.text),
-        'Übernommen wurden alle Absätze'
-      );
+      return alsText(zeilen, nurListe ? 'Übernommen wurden Überschriften und Aufzählungspunkte' : 'Übernommen wurden alle Absätze');
     }
     if (endung === 'csv') return tabelleOderListe(csvZeilen(textDekodieren(puffer)), 'CSV');
     if (endung === 'txt') {
@@ -456,7 +466,7 @@
         const kopf = kopfzeileFinden(zeilen);
         if (kopf) return alsTabelle(zeilen, kopf, 'Text');
       }
-      return alsListe(text.split(/\r?\n/));
+      return { art: 'text', text, hinweis: '' };
     }
     if (endung === 'xls') throw fehler('Ältere Excel-Dateien (.xls) bitte als .xlsx oder CSV speichern.');
     if (endung === 'doc') throw fehler('Ältere Word-Dateien (.doc) bitte als .docx speichern.');
@@ -565,6 +575,330 @@
     return ergebnis;
   }
 
+  /* ---------- Text in Schritte trennen ---------- */
+
+  /*
+   * Zusätze am Zeilen- oder Satzanfang. Sie gehören zum Schritt davor (außer „Aktion:“ und „Phase:“).
+   */
+  const ZUSAETZE = [
+    ['phase', /^(?:phase|abschnitt|etappe)(?:\s*\d+)?\s*[:–-]\s*/i],
+    ['painPoint', /^(?:probleme?|pain ?points?|pp|schmerzpunkte?|hürden?|huerden?|schwierigkeit(?:en)?)\s*[:–-]\s*/i],
+    ['touchpoint', /^(?:touchpoints?|kanal|kontaktpunkt)\s*[:–-]\s*/i],
+    ['gedanken', /^(?:gedanken?|denkt)\s*[:–-]\s*/i],
+    ['zitat', /^(?:zitat|o-ton|originalton)\s*[:–-]\s*/i],
+    ['emotion', /^(?:emotion|gefühl|gefuehl|stimmung)\s*[:–-]\s*/i],
+    ['intern', /^(?:intern|interner ablauf|backstage|hintergrund|system)\s*[:–-]\s*/i],
+    ['aktion', /^(?:aktion|schritt|kunde|kundin|kund\*in)\s*[:–-]\s*/i],
+  ];
+
+  const AUFZAEHLUNG = /^(?:[-*•–·>▪◦]+|\(?\d{1,3}(?:\.\d{1,3})*[.):]|\d{1,3}(?:\.\d{1,3})+|[a-z]\))\s+/;
+
+  /** Abkürzungen, an denen kein Satz endet. */
+  const ABKUERZUNGEN = ['z. B.', 'z.B.', 'd. h.', 'd.h.', 'u. a.', 'u.a.', 'bzw.', 'ca.', 'Nr.', 'Dr.', 'Hr.', 'Fr.', 'evtl.', 'ggf.', 'inkl.', 'usw.', 'etc.', 'vgl.', 'bspw.', 'max.', 'min.', 'Std.', 'Min.', 'Tel.', 'Str.', 'o. Ä.', 'o.Ä.'];
+
+  const UEBERLEITUNG = /^(?:und\s+)?(?:dann|danach|anschließend|anschliessend|daraufhin|schließlich|schliesslich|zuerst|zunächst|zunaechst|als nächstes|als naechstes|im anschluss|am ende|zum schluss|außerdem|ausserdem|erst)\b\s*,?\s*/i;
+
+  const TOUCHPOINT_HINWEISE = [
+    ['Voicebot', /voicebot|sprachassistent|sprachdialog|\bbot\b|ivr/i],
+    ['SMS', /\bsms\b/i],
+    ['E-Mail', /e-?mail|\bmail\b/i],
+    ['Chat', /\bchat/i],
+    ['App', /\bapp\b/i],
+    ['Website', /website|webseite|internetseite|\binternet\b|\bonline\b|portal|homepage/i],
+    ['Telefon', /telefon|hotline|\banruf|\bruft\b[^.]*\ban\b|\brückruf|\brueckruf/i],
+    ['Brief', /\bbrief\b|\bpost\b|schreiben\b/i],
+    ['Aushang', /aushang|hausflur|schwarze[sn]? brett/i],
+    ['Vor Ort', /vor ort|servicebüro|kundenbüro|kundenbuero|geschäftsstelle|geschaeftsstelle/i],
+    ['Service-Team', /service-?team|mitarbeiter|kundenservice|sachbearbeit/i],
+  ];
+
+  const EMOTION_HINWEISE = [
+    [-2, /wütend|wuetend|sehr verärgert|sehr veraergert|stinksauer|verzweifelt|völlig genervt|voellig genervt|gibt auf/i],
+    [-1, /verärger|veraerger|genervt|frust|unzufrieden|nicht zufrieden|enttäusch|enttaeusch|verunsicher|unsicher|ratlos|ungeduldig|wiederholen|wartet lange|lange warten|legt auf|nicht erkannt|versteht nicht|ärgert|aergert|sorge|angst|stress/i],
+    [2, /begeistert|sehr zufrieden|freut sich sehr/i],
+    [1, /zufrieden|erleichtert|freut sich|\bfroh\b|beruhigt|klappt|problemlos|schnell erledigt|bestätigung/i],
+  ];
+
+  /** Sätze, die ein Problem des Schritts davor beschreiben. */
+  const PROBLEMSATZ = /^(?:leider|problem(?:atisch)?|schwierig|ärgerlich|aergerlich|aber)\b/i;
+  /** Sätze, die nur das Gefühl im Schritt davor beschreiben („Sie ist genervt, weil …“). */
+  const GEFUEHLSSATZ = /^(?:(?:sie|er|die kundin|der kunde|der mieter|die mieterin|die person)\s+)?(?:ist|wirkt|fühlt sich|fuehlt sich|ärgert sich|aergert sich|freut sich)\b/i;
+  /** Sätze mit Gedanken der Person. */
+  const GEDANKENSATZ = /^(?:(?:sie|er|die person|der kunde|die kundin|kund\*in)\s+)?(?:denkt|fragt sich)\b\s*:?\s*/i;
+
+  /** Zeilen, die auf eines dieser Wörter enden, sind mitten im Satz umbrochen (z. B. beim Kopieren aus PDF). */
+  const BINDEWORT_AM_ENDE = /\s(?:der|die|das|den|dem|des|ein|eine|einen|einem|einer|und|oder|aber|für|fuer|mit|von|vom|zu|zum|zur|im|in|an|am|auf|bei|beim|nach|aus|über|ueber|um|wenn|dass|weil|als|wie|sich|nicht|noch|auch|sie|er|es|ihr|ihre|seine|sein)$/i;
+
+  let vorschlagZaehler = 0;
+  function vorschlagId() {
+    vorschlagZaehler += 1;
+    return 'v' + vorschlagZaehler;
+  }
+
+  function ersterGross(text) {
+    return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+  }
+
+  function aufraeumen(text) {
+    let t = String(text || '').trim().replace(AUFZAEHLUNG, '').trim();
+    for (let i = 0; i < 3; i++) t = t.replace(UEBERLEITUNG, '');
+    // Aus Sicht der Person formulieren: „Die Kundin ruft an“ → „Ruft an“, „ruft sie an“ → „ruft an“
+    t = t.replace(/^(?:(?:die|der)\s+)?(?:kundin|kunde|mieterin|mieter|mieter\*in|kund\*in|person)\s+(?=\S)/i, '');
+    t = t.replace(/^(?:sie|er)\s+(?=\S)/i, '');
+    t = t.replace(/^([a-zäöüßA-ZÄÖÜ]+)\s+(?:sie|er)\s+(?=\S)/, '$1 ');
+    t = t.replace(/^[„"“'‚»«]+|[“"”'‘«»]+$/g, (m, offset) => (offset === 0 ? '' : m));
+    t = t.replace(/[\s.;,:–-]+$/, '').trim();
+    if (!/[A-Za-zÄÖÜäöüß]{2}/.test(t)) return '';
+    return ersterGross(t);
+  }
+
+  function saetzeTrennen(text) {
+    let t = text;
+    ABKUERZUNGEN.forEach((a, i) => {
+      t = t.split(a).join('\u0001' + i + '\u0002');
+    });
+    return t
+      .split(/(?<=[A-Za-zÄÖÜäöüß)“"'][.!?])\s+(?=[A-ZÄÖÜ„"(\d])/)
+      .map((s) => s.replace(/\u0001(\d+)\u0002/g, (m, i) => ABKUERZUNGEN[Number(i)]));
+  }
+
+  /** Nummerierung innerhalb einer Zeile („1. A 2. B 3. C“) nur, wenn sie fortlaufend ist. */
+  function nummernTrennen(zeile) {
+    const treffer = Array.from(zeile.matchAll(/(?:^|\s)\(?(\d{1,2})[.)]\s+(?=\S)/g));
+    if (treffer.length < 2) return [zeile];
+    const nummern = treffer.map((m) => Number(m[1]));
+    if (!nummern.every((n, i) => i === 0 || n === nummern[i - 1] + 1)) return [zeile];
+    const teile = [];
+    let start = 0;
+    for (const m of treffer) {
+      if (m.index > start) teile.push(zeile.slice(start, m.index));
+      start = m.index;
+    }
+    teile.push(zeile.slice(start));
+    return teile;
+  }
+
+  function ueberschrift(zeile) {
+    const md = /^#{1,6}\s+(.+)$/.exec(zeile);
+    if (md) return md[1].replace(/:\s*$/, '').trim();
+    if (/:\s*$/.test(zeile) && zeile.length <= 70 && !/[.!?]\s/.test(zeile)) {
+      return zeile.replace(/:\s*$/, '').replace(/^(?:\d{1,2}[.)]|[IVX]{1,4}\.)\s+/, '').trim();
+    }
+    const buchstaben = zeile.replace(/[^A-Za-zÄÖÜäöüß]/g, '');
+    if (buchstaben.length >= 4 && zeile.length <= 50 && buchstaben === buchstaben.toUpperCase()) return zeile.trim();
+    return null;
+  }
+
+  function vorschlagSchritt(aktion) {
+    return { id: vorschlagId(), aktiv: true, aktion, touchpoint: '', touchpointVorschlag: false, emotion: null, emotionVorschlag: false, painPoints: [], gedanken: '', zitat: '', intern: '' };
+  }
+
+  /**
+   * Trennt einen beliebigen Text in einen Vorschlag aus Phasen und Schritten.
+   * o.saetze (Standard true): auch nach Sätzen trennen.
+   * Ergebnis: { gruppen: [{ phase, schritte: [...] }], anzahl }
+   */
+  function textZuVorschlag(text, o) {
+    const mitSaetzen = !o || o.saetze !== false;
+    const gruppen = [{ phase: '', schritte: [] }];
+    const gruppe = () => gruppen[gruppen.length - 1];
+    const letzter = () => {
+      for (let i = gruppen.length - 1; i >= 0; i--) {
+        const s = gruppen[i].schritte;
+        if (s.length) return s[s.length - 1];
+      }
+      return null;
+    };
+    const neuePhase = (name) => {
+      if (!gruppe().schritte.length && !gruppe().phase) gruppe().phase = name;
+      else gruppen.push({ phase: name, schritte: [] });
+    };
+    const zuLetztem = (feld, wert) => {
+      let s = letzter();
+      if (!s) {
+        s = vorschlagSchritt('');
+        gruppe().schritte.push(s);
+      }
+      if (feld === 'painPoint') s.painPoints.push(ersterGross(wert));
+      else if (feld === 'emotion') s.emotion = emotionAusText(wert);
+      else s[feld] = s[feld] ? s[feld] + ' ' + wert : wert;
+    };
+    const teilVerarbeiten = (teil) => {
+      const roh = String(teil || '').trim().replace(AUFZAEHLUNG, '').trim();
+      if (!roh) return;
+      for (const [feld, muster] of ZUSAETZE) {
+        if (muster.test(roh)) {
+          const wert = roh.replace(muster, '').replace(/[\s.;,]+$/, '').trim();
+          if (!wert) return;
+          if (feld === 'phase') neuePhase(wert);
+          else if (feld === 'aktion') gruppe().schritte.push(vorschlagSchritt(aufraeumen(wert)));
+          else zuLetztem(feld, feld === 'touchpoint' ? wert : aufraeumen(wert) || wert);
+          return;
+        }
+      }
+      const zitat = /^[„"“»‚'](.+)[“"”«‘']$/.exec(roh);
+      if (zitat && letzter()) {
+        zuLetztem('zitat', '„' + zitat[1].trim() + '“');
+        return;
+      }
+      if (letzter() && PROBLEMSATZ.test(roh)) {
+        const wert = aufraeumen(roh.replace(/^(?:problem(?:atisch)?|aber)\b\s*:?\s*/i, ''));
+        if (wert) zuLetztem('painPoint', wert);
+        return;
+      }
+      if (letzter() && GEFUEHLSSATZ.test(roh)) {
+        const emo = EMOTION_HINWEISE.find(([, m]) => m.test(roh));
+        if (emo) {
+          const s = letzter();
+          s.emotion = emo[0];
+          s.emotionVorschlag = true;
+          const grund = /\b(?:weil|da)\s+(.+)$/i.exec(roh);
+          if (grund && emo[0] < 0) s.painPoints.push(ersterGross(grund[1].replace(/^(?:sie|er)\s+/i, '').replace(/[\s.;,]+$/, '')));
+          return;
+        }
+      }
+      if (letzter() && GEDANKENSATZ.test(roh)) {
+        const wert = roh.replace(GEDANKENSATZ, '').trim();
+        if (wert) zuLetztem('gedanken', wert);
+        return;
+      }
+      const aktion = aufraeumen(roh);
+      if (aktion) gruppe().schritte.push(vorschlagSchritt(aktion));
+    };
+
+    // Zeilen vorbereiten: umbrochene Fließtextzeilen (z. B. aus PDF) wieder zusammenfügen
+    const zeilen = [];
+    for (const rohzeile of String(text || '').replace(/\r\n?/g, '\n').split('\n')) {
+      const z = rohzeile.replace(/\t+/g, ' ').replace(/\s+/g, ' ').trim();
+      const vorher = zeilen.length ? zeilen[zeilen.length - 1] : '';
+      const fortsetzung =
+        z &&
+        vorher &&
+        vorher.length >= 50 &&
+        !/[.!?:;]$/.test(vorher) &&
+        !AUFZAEHLUNG.test(z) &&
+        !ueberschrift(vorher) &&
+        (/^[a-zäöüß]/.test(z) || BINDEWORT_AM_ENDE.test(vorher));
+      if (fortsetzung) {
+        zeilen[zeilen.length - 1] = vorher + ' ' + z;
+      } else {
+        zeilen.push(z);
+      }
+    }
+
+    for (const zeile of zeilen) {
+      if (!zeile) continue;
+      const titel = ueberschrift(zeile);
+      if (titel && !ZUSAETZE.some(([, m]) => m.test(zeile))) {
+        neuePhase(titel);
+        continue;
+      }
+      let teile = [zeile.replace(AUFZAEHLUNG, '')];
+      teile = teile.flatMap(nummernTrennen);
+      teile = teile.flatMap((t) => t.split(/\s*(?:→|->|=>|⇒|➜|➔|»)\s*/));
+      teile = teile.flatMap((t) => t.split(/\s*;\s*/));
+      if (mitSaetzen) teile = teile.flatMap(saetzeTrennen);
+      teile = teile.flatMap((t) => t.split(/,\s*(?:und\s+)?(?=(?:dann|danach|anschließend|anschliessend|daraufhin|schließlich|schliesslich)\s)/i));
+      teile = teile.flatMap((t) => t.split(/,\s+(?=(?:sie|er|die kundin|der kunde|die person)\s)/i));
+      teile.forEach(teilVerarbeiten);
+    }
+
+    // Vorschläge für Touchpoint und Emotion
+    for (const g of gruppen) {
+      for (const s of g.schritte) {
+        const inhalt = [s.aktion, s.gedanken, s.zitat].concat(s.painPoints).join(' ');
+        if (!s.touchpoint) {
+          const tp = TOUCHPOINT_HINWEISE.find(([, m]) => m.test(s.aktion));
+          if (tp) {
+            s.touchpoint = tp[0];
+            s.touchpointVorschlag = true;
+          }
+        }
+        if (s.emotion === null) {
+          const emo = EMOTION_HINWEISE.find(([, m]) => m.test(inhalt));
+          if (emo) s.emotion = emo[0];
+          else if (s.painPoints.length) s.emotion = -1;
+          s.emotionVorschlag = s.emotion !== null;
+        }
+      }
+    }
+    const ergebnis = gruppen.filter((g) => g.schritte.length || g.phase);
+    return { gruppen: ergebnis, anzahl: ergebnis.reduce((n, g) => n + g.schritte.length, 0) };
+  }
+
+  /**
+   * Legt die ausgewählten Schritte eines Vorschlags an.
+   * o: phaseId (für Schritte ohne Überschrift), als ('aktion' | 'intern'), quelleId.
+   */
+  function vorschlagUebernehmen(map, vorschlag, o) {
+    const opt = o || {};
+    const ergebnis = { schritte: [], neuePhasen: [], ueberzaehlig: 0 };
+    const phasen = new Map(map.phasen.filter((p) => p.name.trim()).map((p) => [norm(p.name), p]));
+    let startphase =
+      map.phasen.length === 1 && !map.phasen[0].name.trim() && !map.schritte.some((s) => s.phaseId === map.phasen[0].id)
+        ? map.phasen[0]
+        : null;
+    const standard = map.phasen.some((p) => p.id === opt.phaseId) ? opt.phaseId : map.phasen.length ? map.phasen[0].id : '';
+    let anzahl = 0;
+    for (const g of vorschlag.gruppen) {
+      const aktive = g.schritte.filter((s) => s.aktiv && (s.aktion.trim() || s.intern.trim() || s.painPoints.length));
+      if (!aktive.length) continue;
+      let phaseId = standard;
+      const name = String(g.phase || '').trim();
+      if (name) {
+        let p = phasen.get(norm(name));
+        if (!p) {
+          if (startphase && !ergebnis.schritte.length) {
+            p = startphase;
+            p.name = name;
+          } else {
+            p = Modell.neuePhase(name);
+            map.phasen.push(p);
+          }
+          startphase = null;
+          phasen.set(norm(name), p);
+          ergebnis.neuePhasen.push(name);
+        }
+        phaseId = p.id;
+      }
+      if (!phaseId) {
+        const p = Modell.neuePhase('');
+        map.phasen.push(p);
+        phaseId = p.id;
+      }
+      for (const v of aktive) {
+        if (anzahl >= Modell.MAX_LISTENSCHRITTE) {
+          ergebnis.ueberzaehlig += 1;
+          continue;
+        }
+        const s = Modell.neuerSchritt(phaseId);
+        if (opt.als === 'intern') s.intern = [v.aktion.trim(), v.intern.trim()].filter(Boolean).join(' ');
+        else {
+          s.aktion = v.aktion.trim();
+          s.intern = v.intern.trim();
+        }
+        s.touchpoint = v.touchpoint.trim();
+        s.emotion = v.emotion;
+        s.gedanken = v.gedanken.trim();
+        s.zitat = v.zitat.trim();
+        s.quelleId = opt.quelleId || '';
+        s.painPoints = v.painPoints
+          .map((t) => String(t).trim())
+          .filter(Boolean)
+          .map((t) => {
+            const pp = Modell.neuerPainPoint();
+            pp.text = t;
+            pp.quelleId = opt.quelleId || '';
+            return pp;
+          });
+        map.schritte.push(s);
+        ergebnis.schritte.push(s);
+        anzahl += 1;
+      }
+    }
+    return ergebnis;
+  }
+
   /** Leere Tabellenvorlage als CSV für Excel (UTF-8 mit BOM, Semikolon). */
   function vorlageCsv() {
     return '﻿' + VORLAGE_SPALTEN.join(';') + '\r\n';
@@ -580,5 +914,7 @@
     dateiAuswerten,
     schritteAusTabelle,
     vorlageCsv,
+    textZuVorschlag,
+    vorschlagUebernehmen,
   };
 });

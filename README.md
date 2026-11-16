@@ -43,7 +43,7 @@ Eingaben bleiben im Browser und werden nicht auf einem Server gespeichert. Ohne 
 |---|---|---|
 | 1 Rahmen | Titel, Anlass, Nutzergruppe, Start- und Endpunkt | 1 Anlass und Rahmen klären |
 | 2 Material | Quellenverzeichnis: welche Unterlagen und Gespräche der Map zugrunde liegen (nur Kurzbezeichnung, kein Inhalt), Anonymisierung je Quelle bestätigen, Lückencheck nach Sichten | 2 Material sammeln, 3 anonymisieren |
-| 3 Schritte | Oben „Neuer Schritt“: Phase wählen, eintippen, was die Person tut, Enter. Darunter eine Zeile je Schritt mit Touchpoint, Emotion und dem, was noch fehlt; per Klick aufklappen und Details ergänzen (Touchpoint, Emotion, Pain Points, optional Gedanken, Zitat, interner Ablauf, Quelle). Mehrere Schritte auswählen und löschen. Zugeklappt: „Mehrere Schritte auf einmal übernehmen“ aus Datei (Excel, CSV, Word, Text) oder Liste, mit Vorschau. Nach Import und Löschen gibt es „Rückgängig“. | 4 Schritte erfassen |
+| 3 Schritte | Oben „Neuer Schritt“: Phase wählen, eintippen, Enter. „Mehrere Schritte auf einmal übernehmen“: Text einfügen oder Datei hineinziehen, die Vorlage trennt ihn in Schritte und zeigt einen bearbeitbaren Vorschlag. Darunter eine Zeile je Schritt mit dem, was noch fehlt; per Klick aufklappen und Details ergänzen. Mehrere Schritte auswählen und löschen, „Rückgängig“ nach Import und Löschen. | 4 Schritte erfassen |
 | 4 Map | Grafische Journey Map: Kopf mit Szenario, Nutzergruppe, Start und Ziel sowie Überblick (Schritte, Touchpoints, Pain Points, Tiefpunkt). Darunter Phasenband, Schrittkarten, Touchpoints mit Symbolen, Gedanken als Sprechblasen, durchgehende Emotionskurve mit Gesichtern und markiertem Tief- und Höhepunkt, Pain Points, Zitate und unter der Sichtbarkeitslinie der interne Ablauf. Quellen als Q1, Q2 … Export als PDF über den Druckdialog (A3 quer) | 5 Map erzeugen |
 | 5 Prüfung & Freigabe | Prüfpunkte, Rückmeldungen aus allen Kanälen, Status und Version, Versionshistorie, Checkliste „Erledigt“ | 6 prüfen lassen, 7 überarbeiten und freigeben |
 
@@ -65,25 +65,26 @@ Während der Prüfung und nach der Freigabe ist der Inhalt gesperrt. Rückmeldun
 
 Zur Prüfung und zur Freigabe darf nichts mehr fehlen und keine Rückfrage offen sein. Für die Freigabe müssen außerdem alle Rückmeldungen bearbeitet sein.
 
-## Schritte aus einer Datei übernehmen
+## Viele Schritte auf einmal übernehmen
 
-Im Reiter „Schritte“ unter „Mehrere Schritte auf einmal übernehmen“:
+Im Reiter „Schritte“ unter „Mehrere Schritte auf einmal übernehmen“: Text einfügen oder eine Datei in das Feld ziehen. Die Vorlage trennt den Text in Schritte und zeigt einen **Vorschlag**, den du vor dem Anlegen bearbeitest (Text ändern, Schritte zusammenführen, abwählen, entfernen, Phasen umbenennen). Danach gibt es „Rückgängig“.
 
-| Datei | Was übernommen wird |
+So wird getrennt:
+
+- Jede Zeile, jeder Aufzählungspunkt und jeder Satz wird ein Schritt (umschaltbar auf „nur Zeilen“). Auch „→“, „;“, „1. … 2. …“ in einer Zeile und „…, dann …“ trennen. Ordnungszahlen („am 3. Tag“) und Abkürzungen („z. B.“) beenden keinen Satz. Beim Kopieren aus PDF umbrochene Zeilen werden wieder zusammengefügt.
+- Überschriften werden Phasen: kurze Zeile mit Doppelpunkt am Ende, „# Überschrift“ oder Überschriften aus Word.
+- Zeilen mit „Problem:“, „Touchpoint:“, „Gedanke:“, „Zitat:“, „Emotion:“ oder „Intern:“ gehören zum Schritt davor. Sätze mit „Leider …“ werden Pain Points, „Sie ist genervt, weil …“ wird Emotion und Pain Point des Schritts davor.
+- Formuliert aus Sicht der Person: „Die Kundin ruft an“ → „Ruft an“, „Dann ruft sie die Hotline an“ → „Ruft die Hotline an“.
+- Touchpoint und Emotion werden anhand von Wörtern vorgeschlagen und hellblau markiert.
+
+| Datei | Was passiert |
 |---|---|
-| Excel (.xlsx) oder CSV | Eine Zeile je Schritt. Spaltenüberschriften wie in der Tabellenvorlage: Phase, Aktion, Touchpoint, Emotion, Pain Points, Quelle Pain Points, Interner Ablauf, Quelle Schritt, Gedanken, Zitat. Auch erkannt: „Prozessschritt“, „Kanal“, „Quelle“ u. a. Andere Spalten (z. B. „Verantwortlich“) werden nicht übernommen. Vor dem Übernehmen gibt es eine Vorschau. |
-| Word (.docx) | Eine Tabelle mit Spalte „Aktion“ oder „Prozessschritt“ wie bei Excel, sonst die Aufzählungspunkte als Liste |
-| Text (.txt) | Ein Schritt pro Zeile, als Liste |
-| PDF | Nicht direkt; Text kopieren und als Liste einfügen |
+| Excel (.xlsx) oder CSV mit Spaltenüberschriften | Eine Zeile je Schritt mit allen Feldern (Tabellenvorlage zum Herunterladen). Andere Spalten (z. B. „Verantwortlich“) werden nicht übernommen. Eigene Vorschau. |
+| Word (.docx) | Tabelle mit Spalte „Aktion“ oder „Prozessschritt“ wie Excel; sonst Überschriften und Aufzählungspunkte als Text in den Vorschlag |
+| Text (.txt) | als Text in den Vorschlag |
+| PDF | Text kopieren und einfügen |
 
-Regeln beim Übernehmen einer Tabelle:
-- Eine leere Phasen-Zelle bedeutet „wie die Zeile davor“. Unbekannte Phasen werden angelegt.
-- Emotion als Zahl von -2 bis 2 oder als Wort („sehr negativ“ bis „sehr positiv“).
-- Mehrere Pain Points in einer Zelle durch Zeilenumbruch oder Semikolon trennen.
-- Quellen als Kürzel („Q2“) oder Bezeichnung. Unbekannte Bezeichnungen werden als neue Quelle angelegt und müssen unter „Material“ noch geprüft werden.
-- Höchstens 50 Schritte auf einmal.
-
-Die Datei wird nur im Browser gelesen, nicht hochgeladen und nicht gespeichert. Übernommen wird nur, was in die Map gehört.
+Höchstens 100 Schritte auf einmal. Alles läuft nur im Browser; die Datei wird nicht hochgeladen und nicht gespeichert.
 
 ## Tests
 

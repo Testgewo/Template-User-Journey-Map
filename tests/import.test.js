@@ -100,10 +100,12 @@ test('Excel: Schritte, Phasen und Quellen werden angelegt', async () => {
   assert.ok(rueck.some((t) => t.startsWith('Quelle Q2') && t.includes('Anonymisierung')));
 });
 
-test('Word: Aufzählung wird zur Liste, Überschrift und Fließtext bleiben draußen', async () => {
+test('Word: Aufzählung wird zu Text, Dokumenttitel und Fließtext bleiben draußen', async () => {
   const a = await I.dateiAuswerten('prozess-liste.docx', testdatei('prozess-liste.docx'));
-  assert.equal(a.art, 'liste');
-  assert.deepEqual(a.zeilen, ['Anruf geht beim Voicebot ein', 'Voicebot erkennt das Anliegen', 'Vorgang wird angelegt', 'Bestätigung wird verschickt']);
+  assert.equal(a.art, 'text');
+  assert.equal(a.text, '- Anruf geht beim Voicebot ein\n- Voicebot erkennt das Anliegen\n- Vorgang wird angelegt\n- Bestätigung wird verschickt');
+  const v = I.textZuVorschlag(a.text);
+  assert.equal(v.anzahl, 4);
 });
 
 test('Word: Tabelle mit Spalte „Prozessschritt“ wird zur Tabelle', async () => {
@@ -124,17 +126,18 @@ test('CSV aus Excel in Windows-1252 wird richtig gelesen', async () => {
   assert.equal(a.datensaetze[0].aktion, 'Hört die Begrüßung');
 });
 
-test('CSV ohne bekannte Überschriften: erste Spalte wird zur Liste', async () => {
+test('CSV ohne bekannte Überschriften: erste Spalte wird zu Text', async () => {
   const a = await I.dateiAuswerten('liste.csv', puffer('Anruf annehmen;Team A\nAnliegen erfassen;Team B\n'));
-  assert.equal(a.art, 'liste');
-  assert.deepEqual(a.zeilen, ['Anruf annehmen', 'Anliegen erfassen']);
+  assert.equal(a.art, 'text');
+  assert.equal(a.text, 'Anruf annehmen\nAnliegen erfassen');
   assert.ok(a.hinweis.includes('erste Spalte'));
 });
 
-test('Textdatei: ein Schritt pro Zeile, auch mit Kommas', async () => {
+test('Textdatei wird als Text übernommen und dann getrennt', async () => {
   const a = await I.dateiAuswerten('schritte.txt', puffer('1. Kunde ruft an, wartet\n\n2. Voicebot meldet sich\n'));
-  assert.equal(a.art, 'liste');
-  assert.deepEqual(a.zeilen, ['Kunde ruft an, wartet', 'Voicebot meldet sich']);
+  assert.equal(a.art, 'text');
+  const v = I.textZuVorschlag(a.text);
+  assert.deepEqual(v.gruppen[0].schritte.map((s) => s.aktion), ['Ruft an, wartet', 'Voicebot meldet sich']);
 });
 
 test('nicht unterstützte oder kaputte Dateien geben eine verständliche Meldung', async () => {
@@ -154,4 +157,103 @@ test('Tabellenvorlage enthält alle Spalten und wird selbst wieder erkannt', asy
   assert.equal(a.art, 'tabelle');
   assert.equal(a.datensaetze[0].intern, 'Anruf landet beim Voicebot');
   assert.equal(a.datensaetze[0].quellePainPoints, 'Q1');
+});
+
+/* ---------- Text in Schritte trennen ---------- */
+
+function aktionen(v) {
+  return v.gruppen.flatMap((g) => g.schritte.map((s) => s.aktion));
+}
+
+test('Fließtext wird in Sätze und Schritte aus Sicht der Person getrennt', () => {
+  const v = I.textZuVorschlag(
+    'Die Kundin bemerkt einen Wasserschaden. Dann ruft sie die Hotline an. Der Voicebot begrüßt sie, sie nennt ihr Anliegen. ' +
+      'Leider wird das Anliegen erst beim zweiten Versuch erkannt. Danach wird sie an das Service-Team weitergeleitet. ' +
+      'Zum Schluss erhält sie eine SMS und ist erleichtert.'
+  );
+  assert.deepEqual(aktionen(v), [
+    'Bemerkt einen Wasserschaden',
+    'Ruft die Hotline an',
+    'Der Voicebot begrüßt sie',
+    'Nennt ihr Anliegen',
+    'Wird an das Service-Team weitergeleitet',
+    'Erhält eine SMS und ist erleichtert',
+  ]);
+  const s = v.gruppen[0].schritte;
+  assert.deepEqual(s[3].painPoints, ['Leider wird das Anliegen erst beim zweiten Versuch erkannt']);
+  assert.equal(s[3].emotion, -1);
+  assert.equal(s[1].touchpoint, 'Telefon');
+  assert.equal(s[1].touchpointVorschlag, true);
+  assert.equal(s[4].touchpoint, 'Service-Team');
+  assert.equal(s[5].touchpoint, 'SMS');
+  assert.equal(s[5].emotion, 1);
+});
+
+test('Überschriften werden Phasen, Zusätze gehören zum Schritt davor', () => {
+  const v = I.textZuVorschlag(
+    'Anliegen erkennen:\n- Bemerkt Schaden\n- Sucht Nummer auf der Website\nProblem: Nummer schwer zu finden\n\n' +
+      '## Kontakt aufnehmen\n1. Ruft Hotline an\n2. Hört Begrüßung vom Voicebot\nGedanke: Ist das ein Anrufbeantworter?\n' +
+      'Zitat: Ich dachte, ich bin falsch verbunden\nIntern: Anruf wird zum Voicebot geleitet\nTouchpoint: Voicebot\nEmotion: negativ'
+  );
+  assert.deepEqual(v.gruppen.map((g) => g.phase), ['Anliegen erkennen', 'Kontakt aufnehmen']);
+  assert.deepEqual(aktionen(v), ['Bemerkt Schaden', 'Sucht Nummer auf der Website', 'Ruft Hotline an', 'Hört Begrüßung vom Voicebot']);
+  const s = v.gruppen[1].schritte[1];
+  assert.equal(s.gedanken, 'Ist das ein Anrufbeantworter?');
+  assert.equal(s.zitat, 'Ich dachte, ich bin falsch verbunden');
+  assert.equal(s.intern, 'Anruf wird zum Voicebot geleitet');
+  assert.equal(s.touchpoint, 'Voicebot');
+  assert.equal(s.touchpointVorschlag, false);
+  assert.equal(s.emotion, -1);
+  assert.deepEqual(v.gruppen[0].schritte[1].painPoints, ['Nummer schwer zu finden']);
+});
+
+test('Pfeile, Semikolons und Nummern in einer Zeile trennen Schritte', () => {
+  assert.deepEqual(aktionen(I.textZuVorschlag('Ruft an → hört Ansage -> nennt Anliegen; erhält SMS')), [
+    'Ruft an',
+    'Hört Ansage',
+    'Nennt Anliegen',
+    'Erhält SMS',
+  ]);
+  assert.deepEqual(aktionen(I.textZuVorschlag('1. Anruf 2. Ansage 3. Anliegen nennen')), ['Anruf', 'Ansage', 'Anliegen nennen']);
+});
+
+test('Ordnungszahlen und Abkürzungen beenden keinen Satz', () => {
+  assert.deepEqual(aktionen(I.textZuVorschlag('Am 3. Tag ruft sie an. Sie nennt z. B. die Wohnung.')), ['Am 3. Tag ruft sie an', 'Nennt z. B. die Wohnung']);
+});
+
+test('Gefühlssätze werden Emotion und Pain Point des Schritts davor', () => {
+  const v = I.textZuVorschlag('Der Mieter meldet sich telefonisch. Er ist genervt, weil er lange warten muss. Danach nennt er sein Anliegen.');
+  const s = v.gruppen[0].schritte;
+  assert.equal(s.length, 2);
+  assert.equal(s[0].emotion, -1);
+  assert.deepEqual(s[0].painPoints, ['Lange warten muss']);
+});
+
+test('Nur nach Zeilen trennen, wenn gewünscht', () => {
+  const text = 'Ruft an. Wartet.\nNennt Anliegen';
+  assert.equal(I.textZuVorschlag(text).anzahl, 3);
+  assert.equal(I.textZuVorschlag(text, { saetze: false }).anzahl, 2);
+});
+
+test('Umbrochene Zeilen aus PDF werden wieder zusammengefügt', () => {
+  const v = I.textZuVorschlag('Die Kundin sucht auf der Website nach der Telefonnummer für\nSchadensmeldungen und findet sie nicht.');
+  assert.equal(v.anzahl, 1);
+});
+
+test('Vorschlag übernehmen: Phasen, Felder, abgewählte Schritte und interner Ablauf', () => {
+  const m = M.leereMap();
+  const v = I.textZuVorschlag('Kontakt aufnehmen:\n- Ruft Hotline an\nProblem: Lange Warteschleife\n- Hört Ansage\n\nAbschluss:\n- Erhält SMS');
+  v.gruppen[0].schritte[1].aktiv = false;
+  const erg = I.vorschlagUebernehmen(m, v, {});
+  assert.deepEqual(m.phasen.map((p) => p.name), ['Kontakt aufnehmen', 'Abschluss']);
+  assert.equal(erg.schritte.length, 2);
+  assert.equal(m.schritte[0].aktion, 'Ruft Hotline an');
+  assert.equal(m.schritte[0].touchpoint, 'Telefon');
+  assert.deepEqual(m.schritte[0].painPoints.map((pp) => pp.text), ['Lange Warteschleife']);
+  assert.equal(m.schritte[1].phaseId, m.phasen[1].id);
+
+  const m2 = M.leereMap();
+  I.vorschlagUebernehmen(m2, I.textZuVorschlag('Vorgang wird angelegt'), { als: 'intern' });
+  assert.equal(m2.schritte[0].aktion, '');
+  assert.equal(m2.schritte[0].intern, 'Vorgang wird angelegt');
 });

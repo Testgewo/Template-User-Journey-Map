@@ -190,7 +190,7 @@
   /* ---------- Schritte aus einer Liste ---------- */
 
   /** Höchstzahl der Schritte, die auf einmal aus einer Liste angelegt werden. */
-  const MAX_LISTENSCHRITTE = 50;
+  const MAX_LISTENSCHRITTE = 100;
 
   /*
    * Aufzählungszeichen und Nummerierungen am Zeilenanfang: „- “, „• “, „1. “, „1) “, „(1) “, „1.2 “, „a) “.

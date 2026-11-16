@@ -1217,6 +1217,122 @@ button[disabled].primaer {
   opacity: 0.5;
 }
 
+/* Mehrere Schritte: Textfeld und Vorschlag */
+label.feld-titel {
+  display: block;
+  font-weight: 600;
+  margin: 0.75rem 0 0.25rem;
+}
+textarea.ablage {
+  min-height: 11rem;
+  border-style: dashed;
+  border-width: 2px;
+  background: var(--farbe-flaeche-2);
+}
+textarea.ablage.ziehen {
+  border-color: var(--farbe-primaer);
+  background: var(--hinweis-flaeche);
+}
+.text-vorschlag:not(:empty) {
+  margin-top: 1rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--farbe-rand);
+}
+.vorschlag-optionen {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: 0 1.5rem;
+  margin: 0.5rem 0;
+}
+.vorschlag-gruppe {
+  margin: 0.75rem 0;
+}
+.vorschlag-kopf {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.4rem;
+}
+input.vorschlag-phase {
+  flex: 1 1 14rem;
+  width: auto;
+  font-weight: 700;
+}
+.vorschlag-liste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.vorschlag-zeile {
+  display: grid;
+  grid-template-columns: auto auto minmax(12rem, 1fr) minmax(8rem, 12rem) minmax(8rem, 11rem) auto;
+  align-items: center;
+  gap: 0.4rem 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--farbe-rand);
+  border-radius: var(--radius);
+  background: var(--farbe-flaeche);
+}
+.vorschlag-zeile > input[type='checkbox'] {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+.vorschlag-zeile .sz-nr {
+  background: var(--farbe-text-leise);
+}
+.vorschlag-zeile > .werkzeuge {
+  width: calc(88px + 0.25rem);
+  justify-content: flex-end;
+}
+.vorschlag-zeile.aus {
+  opacity: 0.5;
+}
+.vorschlag-zeile.aus .v-aktion {
+  text-decoration: line-through;
+}
+.vorschlag-zeile input,
+.vorschlag-zeile select {
+  min-height: 40px;
+  padding: 0.35rem 0.5rem;
+}
+.vorschlag-zeile .vorschlag {
+  background: var(--hinweis-flaeche);
+}
+.v-extras {
+  grid-column: 3 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.5rem;
+}
+.v-extra {
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  background: var(--farbe-flaeche-2);
+  border: 1px solid var(--farbe-rand);
+  font-size: 0.8rem;
+  color: var(--farbe-text-leise);
+}
+.v-extra.pp {
+  background: var(--fehlt-flaeche);
+  color: var(--fehlt-text);
+  border-color: transparent;
+}
+@media (max-width: 52rem) {
+  .vorschlag-zeile {
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+  }
+  .vorschlag-zeile .v-tp,
+  .vorschlag-zeile .v-emo {
+    grid-column: 3 / span 1;
+  }
+  .v-extras {
+    grid-column: 1 / -1;
+  }
+}
+
 /* Rückgängig-Leiste unten auf der Seite */
 .rueckgaengig {
   position: fixed;

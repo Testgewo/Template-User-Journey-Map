@@ -238,9 +238,9 @@ test('Liste: Schritte werden als Aktion oder interner Ablauf mit Phase und Quell
   assert.ok(fehlt.some((t) => t.includes('Emotion fehlt')));
 });
 
-test('Liste: höchstens 50 Schritte auf einmal', () => {
+test('Liste: höchstens 100 Schritte auf einmal', () => {
   const m = M.leereMap();
-  const text = Array.from({ length: 60 }, (_, i) => 'Schritt ' + (i + 1)).join('\n');
+  const text = Array.from({ length: 120 }, (_, i) => 'Schritt ' + (i + 1)).join('\n');
   assert.equal(M.schritteAusListe(m, { text, als: 'aktion', phaseId: m.phasen[0].id }).length, M.MAX_LISTENSCHRITTE);
 });
 
