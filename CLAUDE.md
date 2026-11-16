@@ -32,6 +32,7 @@ Anforderungen: `docs/rahmendaten.md` (Canvas mit Auslöser, Rollen, Schritten, �
 - Neue Felder: in `leereMap`, `normalisieren` und ggf. `pruefen` ergänzen; bei inkompatiblen Änderungen `SCHEMA_VERSION` erhöhen.
 
 ## Stolperfallen
+- Reiter „Schritte“: Schritte als kompakte Zeilen, aufgeklappt ist höchstens einer (`zustand.offenerSchritt`). Strukturänderungen wie Import und Löschen über `mitRueckgaengig()`; das Angebot „Rückgängig“ verfällt bei der nächsten Änderung (`aendern()`). Beim Sprung aus der Prüfliste klappt `zumFeld()` den passenden Schritt auf.
 - In claude.ai gibt es `window.claude` (`IM_VIEWER`): dort zeigen `confirm()`/`alert()` nichts, `window.print()` und Download-Links tun nichts. Deshalb eigener Dialog `bestaetigen()`, Speichern über `dateiAnbieten()` (Fähigkeit `downloads`) und Export als druckfertige HTML-Datei statt Druckdialog. Nie `window.confirm` verwenden.
 - Pflichtfeld-Hinweise erscheinen erst nach Besuch des Reiters „Prüfung“ oder beim Laden einer Datei (`zustand.alleZeigen`). Hinweise beim Verlassen eines Feldes haben die Seite verschoben und Klicks ins Leere laufen lassen.
 - Feld-IDs (`f-schritt-<id>-aktion` usw.) werden in `checks.js` erzeugt und in `app.js` verwendet; beide Seiten gemeinsam ändern.

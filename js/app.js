@@ -54,6 +54,10 @@
     freigabeDurch: '',
     statusNotiz: '',
     liste: leereListe(),
+    schnell: { text: '', phaseId: '' },
+    offenerSchritt: null,
+    auswahl: new Set(),
+    rueckgaengig: null,
   };
 
   /** Eingaben im Formular „Schritte aus einer Liste übernehmen“ (gehören nicht zur Map). */
@@ -132,13 +136,13 @@
     }, Math.max(fehler ? 10000 : 6000, text.length * 70));
   }
 
-  function fokussieren(id) {
+  function fokussieren(id, ausrichtung) {
     let el = document.getElementById(id);
     if (!el) return;
     if (el.tagName === 'FIELDSET') el = el.querySelector('input:checked') || el.querySelector('input');
     if (!el) return;
     el.focus({ preventScroll: true });
-    el.scrollIntoView({ block: 'center' });
+    el.scrollIntoView({ block: ausrichtung || 'center' });
   }
 
   function fokusNachVerschieben(praefix, richtung) {
@@ -166,6 +170,10 @@
    */
   function aendern(fn, optionen) {
     const o = optionen || {};
+    if (zustand.rueckgaengig) {
+      zustand.rueckgaengig = null;
+      renderRueckgaengig();
+    }
     fn();
     if (o.inhalt !== false) zustand.map.version.stand = M.heute();
     zustand.geaendert = true;
@@ -213,10 +221,19 @@
       aktionen: aktionenInhalt,
       erledigt: erledigtInhalt,
       pruefliste: prueflisteInhalt,
+      auswahl: auswahlInhalt,
     };
     for (const [key, fn] of Object.entries(bereiche)) {
       const el = document.querySelector('[data-abgeleitet="' + key + '"]');
-      if (el) el.replaceChildren(...fn());
+      if (el) el.replaceChildren(...fn().filter(Boolean));
+    }
+    const kurz = document.querySelectorAll('[data-schritt-kurz]');
+    if (kurz.length) {
+      const reihenfolge = M.geordneteSchritte(zustand.map);
+      kurz.forEach((el) => {
+        const schritt = reihenfolge.find((x) => x.id === el.getAttribute('data-schritt-kurz'));
+        if (schritt) el.replaceChildren(...schrittKurzfassung(schritt, reihenfolge.indexOf(schritt) + 1));
+      });
     }
   }
 
@@ -742,7 +759,8 @@
       ? 'Quelle ' + kuerzel + ' löschen? Sie belegt ' + genutzt.text + '. Diese verlieren dann ihren Beleg.'
       : 'Quelle ' + kuerzel + ' löschen?';
     if (!(await bestaetigen(frage, 'Quelle löschen', true))) return;
-    aendern(
+    mitRueckgaengig(
+      'Quelle ' + kuerzel + ' gelöscht.',
       () => {
         zustand.map.quellen = zustand.map.quellen.filter((x) => x !== q);
         for (const schritt of zustand.map.schritte) {
@@ -750,9 +768,8 @@
           for (const pp of schritt.painPoints) if (pp.quelleId === q.id) pp.quelleId = '';
         }
       },
-      { neuZeichnen: true, fokus: 'f-quelle-neu' }
+      { fokus: 'f-quelle-neu' }
     );
-    melden('Quelle ' + kuerzel + ' gelöscht.');
   }
 
   /* ================= Reiter 3: Schritte ================= */
@@ -774,7 +791,7 @@
     ];
     return h(
       'details',
-      { class: 'karte', open: !zustand.map.schritte.length },
+      { class: 'karte' },
       h('summary', {}, 'Ausfüllhilfe: So sieht ein ausgefüllter Schritt aus'),
       h(
         'table',
@@ -808,52 +825,6 @@
     document.querySelectorAll('option[data-phase-option="' + sel + '"]').forEach((el) => {
       el.textContent = el.getAttribute('data-praefix') + name;
     });
-  }
-
-  function phaseZeile(p, i, gesperrt) {
-    const anzahl = zustand.map.schritte.filter((x) => x.phaseId === p.id).length;
-    const letzte = zustand.map.phasen.length - 1;
-    return h(
-      'li',
-      {},
-      feld({
-        id: 'f-phase-' + p.id + '-name',
-        label: 'Phase ' + (i + 1),
-        pflicht: true,
-        wert: p.name,
-        gesperrt,
-        onInput: (v) =>
-          aendern(() => {
-            p.name = v;
-            aktualisierePhasenNamen(p);
-          }),
-      }),
-      gesperrt
-        ? null
-        : h(
-            'div',
-            { class: 'werkzeuge' },
-            h(
-              'button',
-              { type: 'button', class: 'symbol', id: 'btn-ph-' + p.id + '-hoch', 'aria-label': 'Phase ' + (i + 1) + ' nach oben', disabled: i === 0, onclick: () => phaseVerschieben(p, -1) },
-              '↑'
-            ),
-            h(
-              'button',
-              { type: 'button', class: 'symbol', id: 'btn-ph-' + p.id + '-runter', 'aria-label': 'Phase ' + (i + 1) + ' nach unten', disabled: i === letzte, onclick: () => phaseVerschieben(p, 1) },
-              '↓'
-            ),
-            h(
-              'button',
-              { type: 'button', class: 'gefahr', 'aria-label': 'Phase ' + (i + 1) + ' löschen', onclick: () => phaseLoeschen(p, i, anzahl) },
-              'Löschen'
-            )
-          )
-    );
-  }
-
-  function schrittNeuId(phaseIndex, phaseId) {
-    return phaseIndex === 0 ? 'f-schritt-neu' : 'btn-schritt-neu-' + phaseId;
   }
 
   function emotionFeld(schritt, gesperrt) {
@@ -954,10 +925,67 @@
     );
   }
 
-  function schrittKarte(schritt, nr, pos, anzahl, gesperrt) {
+  /* ---------- Schritte als kompakte Liste ---------- */
+
+  const FELD_KURZ = {
+    aktion: 'Aktion',
+    touchpoint: 'Touchpoint',
+    emotion: 'Emotion',
+    phase: 'Phase',
+    quelle: 'Quelle',
+    intern: 'interner Ablauf',
+    gedanken: 'Gedanken',
+    zitat: 'Zitat',
+  };
+
+  /** Was an einem Schritt noch fehlt oder geklärt werden muss, in Stichworten. */
+  function offenePunkte(schritt) {
+    const praefix = 'f-schritt-' + schritt.id + '-';
+    const ppIds = new Set(schritt.painPoints.map((pp) => pp.id));
+    const punkte = [];
+    for (const p of zustand.pruefung.probleme) {
+      if (p.typ === 'hinweis' || !p.feldId) continue;
+      let wort = null;
+      if (p.feldId.startsWith(praefix)) {
+        wort = FELD_KURZ[p.feldId.slice(praefix.length)] || null;
+      } else {
+        const pp = /^f-pp-(.+)-(text|quelle)$/.exec(p.feldId);
+        if (pp && ppIds.has(pp[1])) wort = pp[2] === 'text' ? 'Pain-Point-Text' : 'Beleg für Pain Point';
+      }
+      if (!wort) continue;
+      if (p.kurz.startsWith('Möglicher Personenbezug')) wort = 'Personenbezug prüfen';
+      else if (p.kurz.startsWith('Sehr langer Text') || p.kurz.startsWith('Zitat ist sehr lang')) wort = wort + ' kürzen';
+      if (!punkte.includes(wort)) punkte.push(wort);
+    }
+    return punkte;
+  }
+
+  /** Eine Zeile Kurzfassung: Nummer, Aktion, Touchpoint, Emotion, Pain Points, was noch fehlt. */
+  function schrittKurzfassung(schritt, nr) {
+    const emo = M.EMOTIONEN.find((e) => e.wert === schritt.emotion);
+    const offen = offenePunkte(schritt);
+    return [
+      h('span', { class: 'sz-nr' }, String(nr)),
+      h('span', { class: 'sz-aktion' + (schritt.aktion.trim() ? '' : ' leer') }, schritt.aktion.trim() || 'Aktion noch offen'),
+      h(
+        'span',
+        { class: 'sz-details' },
+        schritt.touchpoint.trim()
+          ? h('span', { class: 'sz-tp' }, symbol(touchpointArt(schritt.touchpoint)), kuerzen(schritt.touchpoint, 40))
+          : null,
+        emo
+          ? h('span', { class: 'sz-emo' }, h('span', { 'aria-hidden': 'true' }, emo.symbol), h('span', { class: 'visuell-versteckt' }, 'Emotion: ' + emo.label))
+          : null,
+        schritt.painPoints.length ? h('span', { class: 'sz-pp' }, mehrzahl(schritt.painPoints.length, 'Pain Point', 'Pain Points')) : null,
+        offen.length ? h('span', { class: 'sz-offen' }, 'fehlt: ' + offen.join(', ')) : h('span', { class: 'sz-ok' }, '✓ vollständig')
+      ),
+    ];
+  }
+
+  /** Felder eines Schritts (aufgeklappte Zeile). Wichtiges oben, Weiteres zum Aufklappen. */
+  function schrittEditor(schritt, nr, gesperrt) {
     const m = zustand.map;
     const f = (feldname) => 'f-schritt-' + schritt.id + '-' + feldname;
-    const titelId = 'h-schritt-' + schritt.id;
     const textFeld = (key, o) =>
       feld(
         Object.assign(
@@ -973,13 +1001,133 @@
           o
         )
       );
+    const weitereOffen =
+      ['gedanken', 'zitat', 'intern', 'quelleId'].some((k) => String(schritt[k] || '').trim()) ||
+      !m.phasen.some((p) => p.id === schritt.phaseId);
     return h(
-      'li',
-      { class: 'karte schritt', id: 'karte-' + schritt.id, 'aria-labelledby': titelId },
+      'div',
+      { class: 'schritt-editor', id: 'editor-' + schritt.id },
       h(
         'div',
-        { class: 'karte-kopf' },
-        h('h4', { id: titelId, tabindex: '-1' }, 'Schritt ' + nr),
+        { class: 'raster' },
+        textFeld('aktion', { label: 'Was tut die Person?', pflicht: true, hilfe: 'Aus ihrer Sicht formulieren, mit Verb.' }),
+        textFeld('touchpoint', { label: 'Touchpoint', pflicht: true, hilfe: 'Kanal oder Kontaktpunkt, z. B. Voicebot, Website, Brief.' })
+      ),
+      emotionFeld(schritt, gesperrt),
+      painPointBereich(schritt, nr, gesperrt),
+      h(
+        'details',
+        { class: 'mehr-felder', open: weitereOffen },
+        h('summary', {}, 'Weitere Angaben (optional): Gedanken, Zitat, interner Ablauf, Quelle, Phase'),
+        h(
+          'div',
+          { class: 'raster' },
+          textFeld('gedanken', { label: 'Gedanken', optional: true, typ: 'textarea', zeilen: 2, hilfe: 'Was geht der Person durch den Kopf?' }),
+          textFeld('zitat', {
+            label: 'Zitat',
+            optional: true,
+            typ: 'textarea',
+            zeilen: 2,
+            hilfe: 'Kurz und anonymisiert, höchstens ' + P.GRENZE_ZITAT + ' Zeichen.',
+          })
+        ),
+        h(
+          'div',
+          { class: 'raster' },
+          textFeld('intern', {
+            label: 'Interner Ablauf',
+            optional: true,
+            typ: 'textarea',
+            zeilen: 2,
+            hilfe: 'Was passiert dabei bei uns oder im System? z. B. „Voicebot legt einen Vorgang an“.',
+          }),
+          h(
+            'div',
+            {},
+            feld({
+              id: f('quelle'),
+              label: 'Quelle des Schritts',
+              optional: true,
+              typ: 'select',
+              wert: schritt.quelleId,
+              gesperrt,
+              optionen: quellenOptionen(),
+              leerText: m.quellen.length ? '– keine –' : '– erst unter „Material“ Quellen anlegen –',
+              hilfe: 'Woher wissen wir, dass es diesen Schritt gibt?',
+              onInput: (v) =>
+                aendern(() => {
+                  schritt.quelleId = v;
+                }),
+            }),
+            feld({
+              id: f('phase'),
+              label: 'In Phase verschieben',
+              typ: 'select',
+              pflicht: true,
+              wert: schritt.phaseId,
+              gesperrt,
+              optionen: m.phasen.map((p, i) => ({
+                wert: p.id,
+                label: 'Phase ' + (i + 1) + ': ' + phasenName(p),
+                attrs: { 'data-phase-option': p.id, 'data-praefix': 'Phase ' + (i + 1) + ': ' },
+              })),
+              onInput: (v) =>
+                aendern(
+                  () => {
+                    schritt.phaseId = v;
+                  },
+                  { neuZeichnen: true, fokus: f('phase') }
+                ),
+            })
+          )
+        )
+      ),
+      h(
+        'div',
+        { class: 'editor-fuss' },
+        h('button', { type: 'button', onclick: () => schrittUmschalten(schritt) }, 'Fertig, zuklappen')
+      )
+    );
+  }
+
+  function schrittZeile(schritt, nr, pos, anzahl, gesperrt) {
+    const offen = zustand.offenerSchritt === schritt.id;
+    let auswahl = null;
+    if (!gesperrt) {
+      auswahl = h('input', {
+        type: 'checkbox',
+        id: 'f-auswahl-' + schritt.id,
+        class: 'sz-auswahl',
+        checked: zustand.auswahl.has(schritt.id),
+        'aria-label': 'Schritt ' + nr + ' auswählen',
+      });
+      auswahl.addEventListener('change', () => {
+        if (auswahl.checked) zustand.auswahl.add(schritt.id);
+        else zustand.auswahl.delete(schritt.id);
+        aktualisiereAbgeleitet();
+      });
+    }
+    return h(
+      'li',
+      { class: 'schritt-zeile' + (offen ? ' offen' : ''), id: 'karte-' + schritt.id },
+      h(
+        'div',
+        { class: 'sz-kopf' },
+        auswahl,
+        h(
+          'button',
+          {
+            type: 'button',
+            class: 'sz-umschalter',
+            id: 'h-schritt-' + schritt.id,
+            'aria-expanded': String(offen),
+            'aria-controls': offen ? 'editor-' + schritt.id : null,
+            onclick: () => schrittUmschalten(schritt),
+          },
+          h('span', { class: 'sz-kurz', 'data-schritt-kurz': schritt.id }, schrittKurzfassung(schritt, nr)),
+          h('span', { class: 'sz-pfeil', 'aria-hidden': 'true' }, offen ? '▲' : '▼'),
+          h('span', { class: 'visuell-versteckt' }, offen ? ' zuklappen' : ' bearbeiten')
+        ),
         gesperrt
           ? null
           : h(
@@ -997,104 +1145,169 @@
               ),
               h(
                 'button',
-                { type: 'button', class: 'gefahr', 'aria-label': 'Schritt ' + nr + ' löschen', onclick: () => schrittLoeschen(schritt, nr) },
-                'Löschen'
+                { type: 'button', class: 'symbol gefahr', 'aria-label': 'Schritt ' + nr + ' löschen', title: 'Löschen', onclick: () => schrittLoeschen(schritt, nr) },
+                '✕'
               )
             )
       ),
-      h(
-        'div',
-        { class: 'raster' },
-        textFeld('aktion', { label: 'Aktion', pflicht: true, hilfe: 'Was tut die Person? Aus ihrer Sicht formulieren.' }),
-        textFeld('touchpoint', { label: 'Touchpoint', pflicht: true, hilfe: 'Kanal oder Kontaktpunkt, z. B. Voicebot, Website, Brief.' })
-      ),
-      h(
-        'div',
-        { class: 'raster' },
-        textFeld('intern', {
-          label: 'Interner Ablauf',
-          optional: true,
-          typ: 'textarea',
-          zeilen: 2,
-          hilfe: 'Was passiert dabei bei uns oder im System? z. B. „Voicebot legt einen Vorgang an“.',
-        }),
-        feld({
-          id: f('quelle'),
-          label: 'Quelle des Schritts',
-          optional: true,
-          typ: 'select',
-          wert: schritt.quelleId,
-          gesperrt,
-          optionen: quellenOptionen(),
-          leerText: m.quellen.length ? '– keine –' : '– erst unter „Material“ Quellen anlegen –',
-          hilfe: 'Woher wissen wir, dass es diesen Schritt gibt?',
-          onInput: (v) =>
-            aendern(() => {
-              schritt.quelleId = v;
-            }),
-        })
-      ),
-      emotionFeld(schritt, gesperrt),
-      painPointBereich(schritt, nr, gesperrt),
-      h(
-        'div',
-        { class: 'raster' },
-        textFeld('gedanken', { label: 'Gedanken', optional: true, typ: 'textarea', zeilen: 2, hilfe: 'Was geht der Person durch den Kopf?' }),
-        textFeld('zitat', {
-          label: 'Zitat',
-          optional: true,
-          typ: 'textarea',
-          zeilen: 2,
-          hilfe: 'Kurz und anonymisiert, höchstens ' + P.GRENZE_ZITAT + ' Zeichen.',
-        })
-      ),
-      feld({
-        id: f('phase'),
-        label: 'Phase',
-        typ: 'select',
-        pflicht: true,
-        wert: schritt.phaseId,
-        gesperrt,
-        hilfe: 'Zum Verschieben in eine andere Phase.',
-        optionen: m.phasen.map((p, i) => ({
-          wert: p.id,
-          label: 'Phase ' + (i + 1) + ': ' + phasenName(p),
-          attrs: { 'data-phase-option': p.id, 'data-praefix': 'Phase ' + (i + 1) + ': ' },
-        })),
-        onInput: (v) =>
-          aendern(
-            () => {
-              schritt.phaseId = v;
-            },
-            { neuZeichnen: true, fokus: f('phase') }
-          ),
-      })
+      offen ? schrittEditor(schritt, nr, gesperrt) : null
     );
   }
 
   function phaseBlock(p, i, gesperrt, nummern) {
-    const schritte = zustand.map.schritte.filter((x) => x.phaseId === p.id);
-    const kopfId = 'h-phase-' + p.id;
+    const m = zustand.map;
+    const schritte = m.schritte.filter((x) => x.phaseId === p.id);
+    const labelId = 'h-phase-' + p.id;
+    const nameId = 'f-phase-' + p.id + '-name';
+    const name = h('input', {
+      type: 'text',
+      id: nameId,
+      class: 'phase-name',
+      placeholder: 'Name der Phase, z. B. „Kontakt aufnehmen“',
+      autocomplete: 'off',
+      disabled: gesperrt,
+      'aria-labelledby': labelId,
+      'aria-describedby': nameId + '-problem',
+    });
+    name.value = p.name;
+    name.addEventListener('input', () =>
+      aendern(() => {
+        p.name = name.value;
+        aktualisierePhasenNamen(p);
+      })
+    );
+    const letzte = m.phasen.length - 1;
     return h(
       'section',
-      { class: 'phase-block', 'aria-labelledby': kopfId },
-      h('h3', { id: kopfId }, 'Phase ' + (i + 1) + ': ', h('span', { 'data-phase-titel': p.id }, phasenName(p))),
+      { class: 'phase-block farbe-' + ((i % 6) + 1), 'aria-labelledby': labelId },
+      h(
+        'div',
+        { class: 'phase-kopf' },
+        h('span', { class: 'phase-nr', id: labelId }, 'Phase ' + (i + 1)),
+        name,
+        gesperrt
+          ? null
+          : h(
+              'div',
+              { class: 'werkzeuge' },
+              h(
+                'button',
+                { type: 'button', class: 'symbol', id: 'btn-ph-' + p.id + '-hoch', 'aria-label': 'Phase ' + (i + 1) + ' nach oben', disabled: i === 0, onclick: () => phaseVerschieben(p, -1) },
+                '↑'
+              ),
+              h(
+                'button',
+                { type: 'button', class: 'symbol', id: 'btn-ph-' + p.id + '-runter', 'aria-label': 'Phase ' + (i + 1) + ' nach unten', disabled: i === letzte, onclick: () => phaseVerschieben(p, 1) },
+                '↓'
+              ),
+              h(
+                'button',
+                { type: 'button', class: 'symbol gefahr', 'aria-label': 'Phase ' + (i + 1) + ' löschen', title: 'Löschen', onclick: () => phaseLoeschen(p, i, schritte.length) },
+                '✕'
+              )
+            )
+      ),
+      problemAnzeige(nameId),
       schritte.length
         ? h(
             'ol',
-            { class: 'liste-ohne' },
-            schritte.map((x, j) => schrittKarte(x, nummern.get(x.id), j, schritte.length, gesperrt))
+            { class: 'schritt-liste' },
+            schritte.map((x, j) => schrittZeile(x, nummern.get(x.id), j, schritte.length, gesperrt))
           )
         : h('p', { class: 'hilfe' }, 'Noch keine Schritte in dieser Phase.'),
       gesperrt
         ? null
         : h(
             'button',
-            { type: 'button', id: schrittNeuId(i, p.id), 'aria-describedby': kopfId, onclick: () => schrittHinzufuegen(p.id) },
-            '+ Schritt hinzufügen'
-          ),
-      i === 0 ? problemAnzeige('f-schritt-neu') : null
+            { type: 'button', class: 'link', id: 'btn-schritt-neu-' + p.id, 'aria-describedby': labelId, onclick: () => schrittHinzufuegen(p.id) },
+            '+ Schritt in dieser Phase'
+          )
     );
+  }
+
+  /** Schnelle Eingabe: Phase wählen, Aktion tippen, Enter. */
+  function schnellErfassung(gesperrt) {
+    if (gesperrt) return null;
+    const m = zustand.map;
+    const schnell = zustand.schnell;
+    if (!m.phasen.some((p) => p.id === schnell.phaseId)) schnell.phaseId = m.phasen.length ? m.phasen[0].id : '';
+    const eingabe = h('input', {
+      type: 'text',
+      id: 'f-schritt-neu',
+      autocomplete: 'off',
+      placeholder: 'z. B. Ruft die Service-Hotline an',
+      'aria-describedby': 'f-schritt-neu-hilfe f-schritt-neu-problem',
+    });
+    eingabe.value = schnell.text;
+    eingabe.addEventListener('input', () => {
+      schnell.text = eingabe.value;
+    });
+    eingabe.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        schnellHinzufuegen();
+      }
+    });
+    return h(
+      'section',
+      { class: 'karte schnell', 'aria-labelledby': 'h-schnell' },
+      h('h3', { id: 'h-schnell' }, 'Neuer Schritt'),
+      h(
+        'div',
+        { class: 'schnell-zeile' },
+        m.phasen.length
+          ? feld({
+              id: 'f-schnell-phase',
+              label: 'Phase',
+              typ: 'select',
+              leerOption: false,
+              wert: schnell.phaseId,
+              optionen: m.phasen.map((p, i) => ({
+                wert: p.id,
+                label: 'Phase ' + (i + 1) + ': ' + phasenName(p),
+                attrs: { 'data-phase-option': p.id, 'data-praefix': 'Phase ' + (i + 1) + ': ' },
+              })),
+              onInput: (v) => {
+                schnell.phaseId = v;
+              },
+            })
+          : null,
+        h('div', { class: 'feld schnell-text' }, h('label', { for: 'f-schritt-neu' }, 'Was tut die Person?'), eingabe),
+        h('button', { type: 'button', class: 'primaer', onclick: schnellHinzufuegen }, 'Hinzufügen')
+      ),
+      h(
+        'p',
+        { class: 'hilfe', id: 'f-schritt-neu-hilfe' },
+        'Enter fügt den Schritt hinzu, danach tippst du gleich den nächsten. Touchpoint, Emotion und Pain Points ergänzt du per Klick auf den Schritt in der Liste.'
+      ),
+      problemAnzeige('f-schritt-neu')
+    );
+  }
+
+  /** Leiste für die Auswahl mehrerer Schritte (z. B. zum Löschen). */
+  function auswahlInhalt() {
+    const m = zustand.map;
+    if (!M.bearbeitbar(m) || !m.schritte.length) return [];
+    for (const id of Array.from(zustand.auswahl)) if (!m.schritte.some((x) => x.id === id)) zustand.auswahl.delete(id);
+    const n = zustand.auswahl.size;
+    const gesamt = m.schritte.length;
+    const alle = h('input', { type: 'checkbox', id: 'f-alle-auswaehlen', checked: n > 0 && n === gesamt });
+    alle.indeterminate = n > 0 && n < gesamt;
+    alle.addEventListener('change', () => {
+      if (alle.checked) m.schritte.forEach((x) => zustand.auswahl.add(x.id));
+      else zustand.auswahl.clear();
+      document.querySelectorAll('input.sz-auswahl').forEach((cb) => {
+        cb.checked = zustand.auswahl.has(cb.id.slice('f-auswahl-'.length));
+      });
+      aktualisiereAbgeleitet();
+      const neu = document.getElementById('f-alle-auswaehlen');
+      if (neu) neu.focus({ preventScroll: true });
+    });
+    return [
+      h('div', { class: 'checkbox-feld' }, alle, h('label', { for: 'f-alle-auswaehlen' }, 'Alle ' + gesamt + ' Schritte auswählen')),
+      n ? h('span', { class: 'auswahl-anzahl' }, n + ' ausgewählt') : null,
+      n ? h('button', { type: 'button', class: 'gefahr', onclick: auswahlLoeschen }, mehrzahl(n, 'Schritt', 'Schritte') + ' löschen') : null,
+    ];
   }
 
   function renderSchritte(panel) {
@@ -1103,85 +1316,113 @@
     const nummern = new Map(M.geordneteSchritte(m).map((x, i) => [x.id, i + 1]));
     const phasenIds = new Set(m.phasen.map((p) => p.id));
     const ohnePhase = m.schritte.filter((x) => !phasenIds.has(x.phaseId));
-    fuellen(panel, 
+    fuellen(
+      panel,
       panelKopf(
         '3 · Schritte erfassen',
-        'Lege zuerst die Phasen an. Erfasse dann je Schritt Aktion, Touchpoint und Emotion, einzeln oder als Liste. Jeder Pain Point braucht eine Quelle.'
+        'Trag Schritt für Schritt ein, was die Person tut. Touchpoint, Emotion und Pain Points ergänzt du per Klick auf den Schritt.'
       ),
       sperrHinweis(),
-      ausfuellhilfe(),
-      h(
-        'section',
-        { class: 'karte', 'aria-labelledby': 'h-phasen' },
-        h('h3', { id: 'h-phasen' }, 'Phasen'),
-        h('p', { class: 'hilfe' }, 'Grobe Abschnitte der Journey in zeitlicher Reihenfolge, z. B. „Anliegen erkennen“, „Kontakt aufnehmen“.'),
-        h('ol', { class: 'phasen-liste' }, m.phasen.map((p, i) => phaseZeile(p, i, gesperrt))),
-        gesperrt ? null : h('button', { type: 'button', id: 'f-phase-neu', onclick: phaseHinzufuegen }, '+ Phase hinzufügen'),
-        problemAnzeige('f-phase-neu')
-      ),
+      schnellErfassung(gesperrt),
       listenFormular(gesperrt),
+      ausfuellhilfe(),
+      h('div', { class: 'auswahl-leiste', 'data-abgeleitet': 'auswahl' }),
       m.phasen.map((p, i) => phaseBlock(p, i, gesperrt, nummern)),
       ohnePhase.length
         ? h(
             'section',
-            { class: 'phase-block', 'aria-labelledby': 'h-ohne-phase' },
-            h('h3', { id: 'h-ohne-phase' }, 'Schritte ohne Phase'),
+            { class: 'phase-block farbe-6', 'aria-labelledby': 'h-ohne-phase' },
+            h('div', { class: 'phase-kopf' }, h('span', { class: 'phase-nr', id: 'h-ohne-phase' }, 'Schritte ohne Phase')),
             h(
               'ol',
-              { class: 'liste-ohne' },
-              ohnePhase.map((x) => schrittKarte(x, nummern.get(x.id), 0, 1, gesperrt))
+              { class: 'schritt-liste' },
+              ohnePhase.map((x, j) => schrittZeile(x, nummern.get(x.id), j, ohnePhase.length, gesperrt))
             )
           )
         : null,
+      gesperrt
+        ? null
+        : h(
+            'div',
+            { class: 'phase-neu' },
+            h('button', { type: 'button', id: 'f-phase-neu', onclick: phaseHinzufuegen }, '+ Phase hinzufügen'),
+            problemAnzeige('f-phase-neu')
+          ),
       weiter('map', 'Weiter: Map ansehen')
     );
   }
 
-  function listenAnzahlText(text) {
-    const n = M.zeilenZuEintraegen(text).length;
-    if (!n) return 'Noch keine Zeilen erkannt.';
-    if (n > M.MAX_LISTENSCHRITTE) {
-      return n + ' Zeilen erkannt. Auf einmal werden höchstens ' + M.MAX_LISTENSCHRITTE + ' Schritte angelegt.';
+  /** Vorschau, was aus dem Listen-Text entsteht, mit Warnung bei Fließtext. */
+  function listenVorschauInhalt(text) {
+    const eintraege = M.zeilenZuEintraegen(text);
+    if (!eintraege.length) return [h('p', { class: 'hilfe' }, 'Noch keine Zeilen. Jede Zeile wird ein eigener Schritt.')];
+    const n = Math.min(eintraege.length, M.MAX_LISTENSCHRITTE);
+    const lang = eintraege.filter((e) => e.length > 120).length;
+    const warnungen = [];
+    if (lang) {
+      warnungen.push(
+        mehrzahl(lang, 'Zeile ist', 'Zeilen sind') +
+          ' sehr lang. Das sieht nach Fließtext aus. Jede Zeile wird ein eigener Schritt. Für einzelne Schritte nutze besser oben „Neuer Schritt“.'
+      );
     }
-    return n === 1 ? '1 Zeile erkannt, daraus wird ein Schritt.' : n + ' Zeilen erkannt, daraus werden ' + n + ' Schritte.';
+    if (eintraege.length > 20) warnungen.push('Das sind viele Schritte. Prüfe, ob wirklich jede Zeile ein Schritt ist.');
+    if (eintraege.length > M.MAX_LISTENSCHRITTE) warnungen.push('Auf einmal werden höchstens ' + M.MAX_LISTENSCHRITTE + ' Schritte angelegt.');
+    return [
+      h('p', {}, h('strong', {}, n === 1 ? 'Daraus wird 1 Schritt:' : 'Daraus werden ' + n + ' Schritte:')),
+      warnungen.length ? h('div', { class: 'box box-warnung' }, warnungen.map((w) => h('p', {}, w))) : null,
+      h(
+        'ol',
+        { class: 'listen-vorschau' },
+        eintraege.slice(0, 5).map((e) => h('li', {}, kuerzen(e, 100)))
+      ),
+      eintraege.length > 5 ? h('p', { class: 'hilfe' }, '… und ' + (eintraege.length - 5) + ' weitere') : null,
+    ];
   }
 
-  /** Formular „Schritte aus einer Liste übernehmen“, z. B. Prozessschritte aus einer Dokumentation. */
+  function listenKnopfText(text) {
+    const n = Math.min(M.zeilenZuEintraegen(text).length, M.MAX_LISTENSCHRITTE);
+    return n === 1 ? '1 Schritt anlegen' : n + ' Schritte anlegen';
+  }
+
+  /** „Mehrere Schritte auf einmal übernehmen“: aus einer Datei oder als Liste. Standardmäßig zugeklappt. */
   function listenFormular(gesperrt) {
     if (gesperrt) return null;
     const m = zustand.map;
     const liste = zustand.liste;
     if (!m.phasen.some((p) => p.id === liste.phaseId)) liste.phaseId = m.phasen.length ? m.phasen[0].id : '';
     if (liste.quelleId && !m.quellen.some((q) => q.id === liste.quelleId)) liste.quelleId = '';
-    const anzahl = h('p', { class: 'hilfe', id: 'f-liste-anzahl', 'aria-live': 'polite' }, listenAnzahlText(liste.text));
+    const vorschau = h('div', { class: 'listen-vorschau-bereich', id: 'f-liste-vorschau', 'aria-live': 'polite' }, listenVorschauInhalt(liste.text));
+    const knopf = h('button', { type: 'button', class: 'primaer', id: 'btn-liste-anlegen', onclick: listeUebernehmen }, listenKnopfText(liste.text));
+    knopf.disabled = !M.zeilenZuEintraegen(liste.text).length;
     const alsOptionen = [
       ['aktion', 'Aktion: was die Kund*in tut'],
       ['intern', 'Interner Ablauf: was bei uns oder im System passiert'],
     ];
     const details = h(
       'details',
-      { class: 'karte', id: 'liste-formular', open: liste.offen === null ? !m.schritte.length : liste.offen },
-      h('summary', {}, 'Schritte übernehmen: aus einer Datei oder als Liste'),
+      { class: 'karte', id: 'liste-formular', open: liste.offen === true },
+      h('summary', {}, 'Mehrere Schritte auf einmal übernehmen (aus einer Datei oder Liste)'),
       dateiBereich(),
       h('h4', { class: 'abschnitt' }, 'Als Liste einfügen'),
       h(
         'p',
         { class: 'hilfe' },
-        'Füge eine Liste ein, einen Schritt pro Zeile. Aufzählungszeichen und Nummern werden entfernt. ' +
-          'Touchpoint, Emotion und Pain Points ergänzt du danach je Schritt. Nur Schrittbezeichnungen einfügen, keine Rohdaten oder Gesprächsmitschriften.'
+        'Für eine Liste von Prozessschritten, nicht für Fließtext: Jede Zeile wird ein eigener Schritt. Aufzählungszeichen und Nummern werden entfernt.'
       ),
       feld({
         id: 'f-liste-text',
-        label: 'Liste',
+        label: 'Liste (ein Schritt pro Zeile)',
         typ: 'textarea',
         zeilen: 6,
         wert: liste.text,
         onInput: (v) => {
           liste.text = v;
-          anzahl.textContent = listenAnzahlText(v);
+          vorschau.replaceChildren(...listenVorschauInhalt(v).filter(Boolean));
+          knopf.textContent = listenKnopfText(v);
+          knopf.disabled = !M.zeilenZuEintraegen(v).length;
         },
       }),
-      anzahl,
+      vorschau,
       h(
         'div',
         { class: 'raster' },
@@ -1226,9 +1467,7 @@
           })
         )
       ),
-      m.phasen.length
-        ? h('button', { type: 'button', class: 'primaer', onclick: listeUebernehmen }, 'Schritte anlegen')
-        : h('p', { class: 'hilfe' }, 'Lege zuerst oben eine Phase an.')
+      m.phasen.length ? knopf : h('p', { class: 'hilfe' }, 'Lege zuerst unten eine Phase an.')
     );
     details.addEventListener('toggle', () => {
       liste.offen = details.open;
@@ -1251,24 +1490,22 @@
     }
     let neu = [];
     const als = liste.als;
-    aendern(
+    mitRueckgaengig(
+      () =>
+        mehrzahl(neu.length, 'Schritt', 'Schritte') +
+        ' aus der Liste angelegt' +
+        (eintraege.length > neu.length ? ' (die ersten ' + neu.length + ' von ' + eintraege.length + ' Zeilen)' : '') +
+        '. Ergänze jetzt ' +
+        (als === 'intern' ? 'die Aktion aus Sicht der Kund*innen, ' : '') +
+        'Touchpoint und Emotion.',
       () => {
         neu = M.schritteAusListe(m, { text: liste.text, als, phaseId: liste.phaseId, quelleId: liste.quelleId });
         liste.text = '';
         liste.offen = false;
         zustand.alleZeigen = true;
-      },
-      { neuZeichnen: true }
+      }
     );
     fokussieren('h-schritt-' + neu[0].id);
-    melden(
-      mehrzahl(neu.length, 'Schritt', 'Schritte') +
-        ' angelegt' +
-        (eintraege.length > neu.length ? ' (die ersten ' + neu.length + ' von ' + eintraege.length + ' Zeilen)' : '') +
-        '. Ergänze jetzt ' +
-        (als === 'intern' ? 'die Aktion aus Sicht der Kund*innen, ' : '') +
-        'Touchpoint und Emotion.'
-    );
   }
 
   /* ---------- Schritte aus einer Datei ---------- */
@@ -1437,6 +1674,7 @@
     const v = zustand.liste.vorschau;
     if (!v) return;
     let erg = null;
+    const stand = M.zuJson(zustand.map);
     aendern(
       () => {
         erg = I.schritteAusTabelle(zustand.map, v.auswertung.datensaetze, { phaseId: zustand.liste.phaseId });
@@ -1457,14 +1695,73 @@
     }
     if (erg.emotionUnklar) teile.push('Bei ' + mehrzahl(erg.emotionUnklar, 'Schritt', 'Schritten') + ' war die Emotion nicht lesbar.');
     if (erg.quelleUnklar) teile.push(mehrzahl(erg.quelleUnklar, 'Quellenkürzel wurde', 'Quellenkürzel wurden') + ' nicht gefunden.');
-    teile.push('Was noch fehlt, ist jetzt markiert.');
-    melden(teile.join(' '));
+    teile.push('Was noch fehlt, steht in der Liste bei jedem Schritt.');
+    zustand.rueckgaengig = { stand, text: teile.join(' ') };
+    renderRueckgaengig();
   }
 
   async function vorlageHerunterladen() {
     if (await dateiAnbieten('journey-map-schritte-vorlage.csv', I.vorlageCsv(), 'text/csv;charset=utf-8')) {
       melden('Vorlage gespeichert. Öffne sie mit Excel, trage eine Zeile je Schritt ein und speichere sie als .xlsx oder .csv.');
     }
+  }
+
+  /* ---------- Phasen und Schritte bearbeiten ---------- */
+
+  /**
+   * Führt eine Strukturänderung aus und bietet danach „Rückgängig“ an.
+   * text: Meldung (oder Funktion, die sie nach der Änderung liefert).
+   */
+  function mitRueckgaengig(text, fn, optionen) {
+    const stand = M.zuJson(zustand.map);
+    aendern(fn, Object.assign({}, optionen || {}, { neuZeichnen: true }));
+    zustand.rueckgaengig = { stand, text: typeof text === 'function' ? text() : text };
+    renderRueckgaengig();
+  }
+
+  function renderRueckgaengig() {
+    const leiste = document.getElementById('rueckgaengig');
+    if (!leiste) return;
+    const r = zustand.rueckgaengig;
+    document.body.classList.toggle('mit-rueckgaengig', !!r);
+    leiste.replaceChildren(
+      ...(r
+        ? [
+            h('p', {}, r.text),
+            h('button', { type: 'button', id: 'btn-rueckgaengig', onclick: rueckgaengigMachen }, 'Rückgängig'),
+            h(
+              'button',
+              {
+                type: 'button',
+                class: 'symbol',
+                'aria-label': 'Hinweis schließen',
+                onclick: () => {
+                  zustand.rueckgaengig = null;
+                  renderRueckgaengig();
+                },
+              },
+              '✕'
+            ),
+          ]
+        : [])
+    );
+  }
+
+  function rueckgaengigMachen() {
+    const r = zustand.rueckgaengig;
+    if (!r) return;
+    const ergebnis = M.ausJson(r.stand);
+    if (!ergebnis.ok) return;
+    zustand.map = ergebnis.map;
+    zustand.rueckgaengig = null;
+    zustand.geaendert = true;
+    zustand.offenerSchritt = null;
+    zustand.auswahl.clear();
+    zustand.pruefung = P.pruefen(zustand.map);
+    renderRueckgaengig();
+    renderAktivenTab();
+    renderKopf();
+    melden('Rückgängig gemacht.');
   }
 
   function phaseHinzufuegen() {
@@ -1487,27 +1784,59 @@
     fokusNachVerschieben('btn-ph-' + p.id, richtung);
   }
 
-  async function phaseLoeschen(p, i, anzahl) {
+  function phaseLoeschen(p, i, anzahl) {
     if (anzahl > 0) {
       melden(
-        'Phase ' + (i + 1) + ' enthält noch ' + mehrzahl(anzahl, 'Schritt', 'Schritte') + '. Bitte die Schritte zuerst in eine andere Phase verschieben oder löschen.',
+        'Phase ' + (i + 1) + ' enthält noch ' + mehrzahl(anzahl, 'Schritt', 'Schritte') + '. Verschiebe oder lösche die Schritte zuerst.',
         true
       );
       return;
     }
-    if (!(await bestaetigen('Phase ' + (i + 1) + ' löschen?', 'Phase löschen', true))) return;
+    mitRueckgaengig('Phase ' + (i + 1) + ' gelöscht.', () => {
+      zustand.map.phasen = zustand.map.phasen.filter((x) => x !== p);
+    });
+    fokussieren('f-phase-neu');
+  }
+
+  function schnellHinzufuegen() {
+    const m = zustand.map;
+    const schnell = zustand.schnell;
+    const text = schnell.text.trim();
+    if (!text) {
+      melden('Trag zuerst ein, was die Person tut.', true);
+      fokussieren('f-schritt-neu');
+      return;
+    }
+    let neu = null;
     aendern(
       () => {
-        zustand.map.phasen = zustand.map.phasen.filter((x) => x !== p);
+        if (!m.phasen.some((p) => p.id === schnell.phaseId)) {
+          if (!m.phasen.length) m.phasen.push(M.neuePhase(''));
+          schnell.phaseId = m.phasen[0].id;
+        }
+        neu = M.neuerSchritt(schnell.phaseId);
+        neu.aktion = text;
+        m.schritte.push(neu);
+        schnell.text = '';
       },
-      { neuZeichnen: true, fokus: 'f-phase-neu' }
+      { neuZeichnen: true }
     );
-    melden('Phase gelöscht.');
+    const eingabe = document.getElementById('f-schritt-neu');
+    if (eingabe) eingabe.focus({ preventScroll: true });
+    const nr = M.geordneteSchritte(m).indexOf(neu) + 1;
+    melden('Schritt ' + nr + ' hinzugefügt: „' + kuerzen(text, 60) + '“');
   }
 
   function schrittHinzufuegen(phaseId) {
     const neu = M.neuerSchritt(phaseId);
+    zustand.offenerSchritt = neu.id;
     aendern(() => zustand.map.schritte.push(neu), { neuZeichnen: true, fokus: 'f-schritt-' + neu.id + '-aktion' });
+  }
+
+  function schrittUmschalten(schritt) {
+    zustand.offenerSchritt = zustand.offenerSchritt === schritt.id ? null : schritt.id;
+    renderAktivenTab();
+    fokussieren('h-schritt-' + schritt.id, 'nearest');
   }
 
   function schrittVerschieben(schritt, richtung) {
@@ -1527,16 +1856,26 @@
     fokusNachVerschieben('btn-s-' + schritt.id, richtung);
   }
 
-  async function schrittLoeschen(schritt, nr) {
-    if (!(await bestaetigen('Schritt ' + nr + ' löschen? Alle Angaben dieses Schritts gehen verloren.', 'Schritt löschen', true))) return;
-    const phaseIndex = zustand.map.phasen.findIndex((p) => p.id === schritt.phaseId);
-    aendern(
-      () => {
-        zustand.map.schritte = zustand.map.schritte.filter((x) => x !== schritt);
-      },
-      { neuZeichnen: true, fokus: phaseIndex >= 0 ? schrittNeuId(phaseIndex, schritt.phaseId) : 'f-phase-neu' }
-    );
-    melden('Schritt ' + nr + ' gelöscht.');
+  function schrittLoeschen(schritt, nr) {
+    mitRueckgaengig('Schritt ' + nr + ' gelöscht' + (schritt.aktion.trim() ? ': „' + kuerzen(schritt.aktion, 50) + '“' : '') + '.', () => {
+      zustand.map.schritte = zustand.map.schritte.filter((x) => x !== schritt);
+      zustand.auswahl.delete(schritt.id);
+      if (zustand.offenerSchritt === schritt.id) zustand.offenerSchritt = null;
+    });
+    fokussieren(document.getElementById('btn-schritt-neu-' + schritt.phaseId) ? 'btn-schritt-neu-' + schritt.phaseId : 'f-schritt-neu', 'nearest');
+  }
+
+  async function auswahlLoeschen() {
+    const ids = new Set(zustand.auswahl);
+    const n = ids.size;
+    if (!n) return;
+    if (!(await bestaetigen(mehrzahl(n, 'Schritt', 'Schritte') + ' löschen? Du kannst das danach rückgängig machen.', mehrzahl(n, 'Schritt', 'Schritte') + ' löschen', true))) return;
+    mitRueckgaengig(mehrzahl(n, 'Schritt', 'Schritte') + ' gelöscht.', () => {
+      zustand.map.schritte = zustand.map.schritte.filter((x) => !ids.has(x.id));
+      zustand.auswahl.clear();
+      if (ids.has(zustand.offenerSchritt)) zustand.offenerSchritt = null;
+    });
+    fokussieren('f-schritt-neu', 'nearest');
   }
 
   function painPointHinzufuegen(schritt) {
@@ -1544,15 +1883,21 @@
     aendern(() => schritt.painPoints.push(pp), { neuZeichnen: true, fokus: 'f-pp-' + pp.id + '-text' });
   }
 
-  async function painPointEntfernen(schritt, pp) {
-    if (pp.text.trim() && !(await bestaetigen('Pain Point „' + kuerzen(pp.text, 60) + '“ entfernen?', 'Entfernen', true))) return;
-    aendern(
-      () => {
-        schritt.painPoints = schritt.painPoints.filter((x) => x !== pp);
-      },
-      { neuZeichnen: true, fokus: 'h-schritt-' + schritt.id }
-    );
-    melden('Pain Point entfernt.');
+  function painPointEntfernen(schritt, pp) {
+    mitRueckgaengig('Pain Point entfernt.', () => {
+      schritt.painPoints = schritt.painPoints.filter((x) => x !== pp);
+    });
+    fokussieren('h-schritt-' + schritt.id, 'nearest');
+  }
+
+  /** Zu welchem Schritt gehört ein Feld? (zum Aufklappen beim Sprung aus der Prüfliste) */
+  function schrittZuFeld(feldId) {
+    if (!feldId) return null;
+    for (const schritt of zustand.map.schritte) {
+      if (feldId.startsWith('f-schritt-' + schritt.id + '-')) return schritt.id;
+      if (schritt.painPoints.some((pp) => feldId.startsWith('f-pp-' + pp.id + '-'))) return schritt.id;
+    }
+    return null;
   }
 
   /* ================= Reiter 4: Map ================= */
@@ -2167,6 +2512,8 @@
 
   function zumFeld(p) {
     zustand.alleZeigen = true;
+    const schrittId = schrittZuFeld(p.feldId);
+    if (schrittId) zustand.offenerSchritt = schrittId;
     zeigeTab(p.tab, p.feldId);
   }
 
@@ -2514,6 +2861,11 @@
     zustand.freigabeDurch = '';
     zustand.statusNotiz = '';
     zustand.liste = leereListe();
+    zustand.schnell = { text: '', phaseId: '' };
+    zustand.offenerSchritt = null;
+    zustand.auswahl.clear();
+    zustand.rueckgaengig = null;
+    renderRueckgaengig();
     zustand.pruefung = P.pruefen(map);
     zeigeTab(o.tab || 'rahmen');
     if (meldung) melden(meldung);
@@ -2623,6 +2975,7 @@
 
   function start() {
     baueDialog();
+    document.body.append(h('div', { id: 'rueckgaengig', class: 'rueckgaengig', role: 'status', 'aria-live': 'polite' }));
     const importEingabe = h('input', { type: 'file', id: 'import-datei', accept: '.xlsx,.xlsm,.csv,.txt,.docx', hidden: true });
     importEingabe.addEventListener('change', importDateiGewaehlt);
     document.body.append(importEingabe);

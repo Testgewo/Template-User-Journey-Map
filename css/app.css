@@ -707,14 +707,6 @@ fieldset.feld {
   }
 }
 
-.phase-block {
-  border-left: 4px solid var(--farbe-primaer);
-  padding-left: 0.75rem;
-  margin-top: 1.5rem;
-}
-.phase-block > h3 {
-  margin-top: 0;
-}
 
 .phasen-liste {
   list-style: none;
@@ -979,6 +971,291 @@ h4.abschnitt {
 
 .rm-zaehler {
   color: var(--farbe-text-leise);
+}
+
+/* ---------- Reiter „Schritte“: Schnelleingabe und kompakte Liste ---------- */
+
+.schnell {
+  border-color: var(--farbe-primaer);
+  border-width: 2px;
+}
+.schnell h3 {
+  margin-top: 0;
+}
+.schnell-zeile {
+  display: grid;
+  grid-template-columns: minmax(10rem, 16rem) minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: end;
+}
+.schnell-zeile .feld {
+  margin-bottom: 0;
+}
+.schnell-zeile > button {
+  min-width: 8rem;
+}
+@media (max-width: 44rem) {
+  .schnell-zeile {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.schnell .hilfe {
+  margin-top: 0.5rem;
+}
+
+.auswahl-leiste {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.25rem;
+  margin: 1rem 0 0.5rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--radius);
+  background: var(--farbe-flaeche-2);
+}
+.auswahl-leiste:empty {
+  display: none;
+}
+.auswahl-leiste .checkbox-feld {
+  align-items: center;
+  min-height: 44px;
+}
+.auswahl-anzahl {
+  font-weight: 600;
+}
+
+.phase-block {
+  margin-top: 1rem;
+  padding: 0.75rem 0.75rem 0.5rem;
+  border: 1px solid var(--farbe-rand);
+  border-left: 5px solid var(--phase-akzent);
+  border-radius: var(--radius);
+  background: var(--farbe-flaeche);
+}
+.phase-kopf {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+.phase-nr {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--farbe-text-leise);
+}
+input.phase-name {
+  flex: 1 1 14rem;
+  width: auto;
+  font-size: 1.1rem;
+  font-weight: 700;
+  border-color: transparent;
+  background: var(--phase-farbe);
+}
+input.phase-name:hover,
+input.phase-name:focus {
+  border-color: var(--farbe-rand-stark);
+}
+.phase-block > .feld-problem {
+  margin-bottom: 0.25rem;
+}
+.phase-block > .hilfe {
+  margin: 0.5rem 0;
+}
+.phase-block > button.link {
+  margin-top: 0.25rem;
+}
+.phase-neu {
+  margin-top: 1rem;
+}
+
+.schritt-liste {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.schritt-zeile {
+  border: 1px solid var(--farbe-rand);
+  border-radius: var(--radius);
+  background: var(--farbe-flaeche);
+}
+.schritt-zeile.offen {
+  border-color: var(--phase-akzent);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 8%);
+}
+.sz-kopf {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  padding: 0 0.4rem 0 0.75rem;
+}
+.sz-auswahl {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+button.sz-umschalter {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.25rem;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  text-align: left;
+  color: var(--farbe-text);
+}
+button.sz-umschalter:hover {
+  background: var(--farbe-flaeche-2);
+}
+.sz-kurz {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem 0.75rem;
+}
+.sz-nr {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.6rem;
+  height: 1.6rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--phase-akzent);
+  color: var(--farbe-flaeche);
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.sz-aktion {
+  flex: 1 1 14rem;
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.sz-aktion.leer {
+  font-weight: 400;
+  font-style: italic;
+  color: var(--farbe-text-leise);
+}
+.sz-details {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem 0.75rem;
+  font-size: 0.85rem;
+  color: var(--farbe-text-leise);
+}
+.sz-tp {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.sz-emo {
+  font-size: 1.1rem;
+}
+.sz-offen {
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  background: var(--rueckfrage-flaeche);
+  color: var(--rueckfrage-text);
+  font-size: 0.8rem;
+}
+.sz-ok {
+  color: var(--ok-text);
+  font-size: 0.8rem;
+}
+.sz-pfeil {
+  flex: none;
+  font-size: 0.7rem;
+  color: var(--farbe-text-leise);
+}
+.schritt-editor {
+  padding: 0.75rem 1rem 1rem;
+  border-top: 1px solid var(--farbe-rand);
+}
+.mehr-felder {
+  margin: 0.5rem 0 0;
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--radius);
+  background: var(--farbe-flaeche-2);
+}
+.mehr-felder > summary {
+  cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+.mehr-felder[open] > summary {
+  margin-bottom: 0.5rem;
+}
+.editor-fuss {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.75rem;
+}
+
+.listen-vorschau-bereich {
+  margin-bottom: 0.75rem;
+}
+.listen-vorschau {
+  margin: 0.25rem 0;
+  padding-left: 1.5rem;
+  font-size: 0.9rem;
+}
+button[disabled].primaer {
+  opacity: 0.5;
+}
+
+/* Rückgängig-Leiste unten auf der Seite */
+.rueckgaengig {
+  position: fixed;
+  left: 50%;
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 40;
+  width: max-content;
+  max-width: min(44rem, calc(100% - 2rem));
+}
+.rueckgaengig:not(:empty) {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.5rem 0.5rem 0.5rem 1rem;
+  border-radius: var(--radius);
+  background: var(--farbe-text);
+  color: var(--farbe-hintergrund);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 25%);
+}
+.rueckgaengig p {
+  margin: 0;
+}
+.rueckgaengig button {
+  flex: none;
+  background: var(--farbe-hintergrund);
+  color: var(--farbe-text);
+  border-color: transparent;
+  font-weight: 600;
+}
+.rueckgaengig button.symbol {
+  background: transparent;
+  color: var(--farbe-hintergrund);
+}
+.mit-rueckgaengig .meldung {
+  bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+}
+.mit-rueckgaengig .fuss {
+  padding-bottom: 8rem;
 }
 
 /* ---------- Journey Map ---------- */

@@ -43,7 +43,7 @@ Eingaben bleiben im Browser und werden nicht auf einem Server gespeichert. Ohne 
 |---|---|---|
 | 1 Rahmen | Titel, Anlass, Nutzergruppe, Start- und Endpunkt | 1 Anlass und Rahmen klären |
 | 2 Material | Quellenverzeichnis: welche Unterlagen und Gespräche der Map zugrunde liegen (nur Kurzbezeichnung, kein Inhalt), Anonymisierung je Quelle bestätigen, Lückencheck nach Sichten | 2 Material sammeln, 3 anonymisieren |
-| 3 Schritte | Phasen und Schritte: Aktion, Touchpoint, Emotion, Pain Points mit Quelle, optional interner Ablauf, Quelle des Schritts, Gedanken und Zitate. Schritte einzeln anlegen, als Liste einfügen oder aus einer Datei übernehmen (Excel, CSV, Word, Text), z. B. Prozessschritte aus einer Dokumentation. Ausfüllhilfe mit Beispielschritt | 4 Schritte erfassen |
+| 3 Schritte | Oben „Neuer Schritt“: Phase wählen, eintippen, was die Person tut, Enter. Darunter eine Zeile je Schritt mit Touchpoint, Emotion und dem, was noch fehlt; per Klick aufklappen und Details ergänzen (Touchpoint, Emotion, Pain Points, optional Gedanken, Zitat, interner Ablauf, Quelle). Mehrere Schritte auswählen und löschen. Zugeklappt: „Mehrere Schritte auf einmal übernehmen“ aus Datei (Excel, CSV, Word, Text) oder Liste, mit Vorschau. Nach Import und Löschen gibt es „Rückgängig“. | 4 Schritte erfassen |
 | 4 Map | Grafische Journey Map: Kopf mit Szenario, Nutzergruppe, Start und Ziel sowie Überblick (Schritte, Touchpoints, Pain Points, Tiefpunkt). Darunter Phasenband, Schrittkarten, Touchpoints mit Symbolen, Gedanken als Sprechblasen, durchgehende Emotionskurve mit Gesichtern und markiertem Tief- und Höhepunkt, Pain Points, Zitate und unter der Sichtbarkeitslinie der interne Ablauf. Quellen als Q1, Q2 … Export als PDF über den Druckdialog (A3 quer) | 5 Map erzeugen |
 | 5 Prüfung & Freigabe | Prüfpunkte, Rückmeldungen aus allen Kanälen, Status und Version, Versionshistorie, Checkliste „Erledigt“ | 6 prüfen lassen, 7 überarbeiten und freigeben |
 
@@ -67,7 +67,7 @@ Zur Prüfung und zur Freigabe darf nichts mehr fehlen und keine Rückfrage offen
 
 ## Schritte aus einer Datei übernehmen
 
-Im Reiter „Schritte“ unter „Schritte übernehmen“:
+Im Reiter „Schritte“ unter „Mehrere Schritte auf einmal übernehmen“:
 
 | Datei | Was übernommen wird |
 |---|---|
