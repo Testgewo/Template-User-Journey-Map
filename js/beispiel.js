@@ -22,6 +22,8 @@
     painPoint: 'Anliegen wird oft erst im zweiten Versuch erkannt',
     quelle: 'Q3: Auswertung der Gesprächsverläufe (aggregiert)',
     zitat: '„Ich musste es dreimal sagen.“',
+    intern: 'Spracherkennung ordnet das Anliegen einer Kategorie zu',
+    schrittQuelle: 'Q2: Workshop mit dem Kundenservice (Protokoll)',
   };
 
   function beispielMap() {
@@ -91,6 +93,8 @@
               quelleId: 'q-interviews',
             },
           ],
+          quelleId: 'q-interviews',
+          intern: '',
         },
         {
           id: 's-anrufen',
@@ -101,6 +105,8 @@
           gedanken: 'Hoffentlich muss ich nicht lange warten.',
           zitat: '',
           painPoints: [],
+          quelleId: 'q-workshop',
+          intern: 'Anruf wird automatisch zum Sprachassistenten geleitet',
         },
         {
           id: 's-begruessung',
@@ -117,6 +123,8 @@
               quelleId: 'q-auswertung',
             },
           ],
+          quelleId: 'q-auswertung',
+          intern: '',
         },
         {
           id: 's-anliegen',
@@ -127,6 +135,8 @@
           gedanken: BEISPIEL_SCHRITT.gedanken,
           zitat: BEISPIEL_SCHRITT.zitat,
           painPoints: [{ id: 'pp-erkennung', text: BEISPIEL_SCHRITT.painPoint, quelleId: 'q-auswertung' }],
+          quelleId: 'q-workshop',
+          intern: BEISPIEL_SCHRITT.intern,
         },
         {
           id: 's-rueckfragen',
@@ -143,6 +153,8 @@
               quelleId: 'q-workshop',
             },
           ],
+          quelleId: 'q-workshop',
+          intern: 'Voicebot fragt Pflichtangaben für den Vorgang ab',
         },
         {
           id: 's-weiterleitung',
@@ -159,6 +171,8 @@
               quelleId: 'q-workshop',
             },
           ],
+          quelleId: 'q-workshop',
+          intern: 'Gespräch wird ohne Zusammenfassung an das Service-Team übergeben',
         },
         {
           id: 's-bestaetigung',
@@ -169,6 +183,8 @@
           gedanken: 'Gut, es ist angekommen.',
           zitat: '',
           painPoints: [],
+          quelleId: 'q-workshop',
+          intern: 'Vorgang wird angelegt, die Bestätigung geht automatisch raus',
         },
       ],
       rueckmeldungen: [

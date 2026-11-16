@@ -758,7 +758,9 @@ details.karte[open] > summary {
 
 .weiter {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
+  gap: 0.75rem;
   margin-top: 1.5rem;
 }
 
@@ -1050,6 +1052,18 @@ table.jm {
 }
 .jm .zitat {
   font-style: italic;
+}
+/* Trennlinie zwischen Kundensicht und internem Ablauf („Line of Visibility“) */
+.jm tr.trenner > th,
+.jm tr.trenner > td {
+  border-top: 3px double var(--farbe-rand-stark);
+  background: var(--farbe-flaeche-2);
+}
+.jm .zeilen-hinweis {
+  display: block;
+  font-weight: 400;
+  font-size: 0.8rem;
+  color: var(--farbe-text-leise);
 }
 .kurve-linie {
   stroke: var(--farbe-text-leise);

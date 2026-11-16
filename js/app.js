@@ -52,7 +52,13 @@
     alleZeigen: false,
     freigabeDurch: '',
     statusNotiz: '',
+    liste: leereListe(),
   };
+
+  /** Eingaben im Formular „Schritte aus einer Liste übernehmen“ (gehören nicht zur Map). */
+  function leereListe() {
+    return { text: '', als: 'aktion', phaseId: '', quelleId: '', offen: false };
+  }
 
   /* ================= DOM-Hilfen ================= */
 
@@ -431,9 +437,9 @@
     const neu = !zustand.map.schritte.length && !zustand.map.rahmen.titel.trim();
     const schritte = [
       ['Anlass und Rahmen klären', 'Reiter „Rahmen“', ''],
-      ['Material sammeln', 'Reiter „Material“', 'Übergabe danach: Fachbereich → UX (Material und Prozesswissen)'],
+      ['Material sammeln', 'Reiter „Material“: Quellenverzeichnis anlegen', 'Übergabe danach: Fachbereich → UX (Material und Prozesswissen)'],
       ['Material anonymisieren', 'Reiter „Material“: Anonymisierung je Quelle bestätigen', ''],
-      ['Schritte erfassen', 'Reiter „Schritte“', ''],
+      ['Schritte erfassen', 'Reiter „Schritte“: einzeln oder als Liste, z. B. aus der Prozessdokumentation', ''],
       ['Map erzeugen', 'Reiter „Map“', 'Übergabe danach: UX → Fachbereich (Entwurf zur Prüfung)'],
       ['Fachlich prüfen lassen', 'Reiter „Prüfung & Freigabe“', 'Übergabe danach: Fachbereich → UX (Rückmeldungen)'],
       ['Überarbeiten und freigeben lassen', 'Reiter „Prüfung & Freigabe“, danach Export unter „Map“', ''],
@@ -567,10 +573,7 @@
   function quelleKarte(q, i, gesperrt) {
     const f = (feldname) => 'f-quelle-' + q.id + '-' + feldname;
     const kuerzel = 'Q' + (i + 1);
-    const genutzt = zustand.map.schritte.reduce(
-      (n, schritt) => n + schritt.painPoints.filter((pp) => pp.quelleId === q.id).length,
-      0
-    );
+    const genutzt = quellenNutzung(q.id);
     return h(
       'li',
       { class: 'karte', id: 'karte-' + q.id },
@@ -607,7 +610,8 @@
         }),
         feld({
           id: f('art'),
-          label: 'Art',
+          label: 'Art der Quelle',
+          hilfe: 'Zeigt, welche Sicht die Quelle abdeckt. Daraus entsteht der Lückencheck oben.',
           typ: 'select',
           pflicht: true,
           wert: q.art,
@@ -645,8 +649,30 @@
             q.anonymisiert = v;
           }),
       }),
-      h('p', { class: 'hilfe' }, genutzt ? 'Belegt ' + mehrzahl(genutzt, 'Pain Point', 'Pain Points') + '.' : 'Belegt noch keinen Pain Point.')
+      h('p', { class: 'hilfe' }, genutzt.text ? 'Belegt ' + genutzt.text + '.' : 'Belegt noch keinen Schritt und keinen Pain Point.')
     );
+  }
+
+  /** Wie oft eine Quelle als Beleg genutzt wird, mit lesbarer Beschreibung. */
+  function quellenNutzung(quelleId) {
+    let schritte = 0;
+    let painPoints = 0;
+    for (const schritt of zustand.map.schritte) {
+      if (schritt.quelleId === quelleId) schritte += 1;
+      painPoints += schritt.painPoints.filter((pp) => pp.quelleId === quelleId).length;
+    }
+    const teile = [];
+    if (schritte) teile.push(mehrzahl(schritte, 'Schritt', 'Schritte'));
+    if (painPoints) teile.push(mehrzahl(painPoints, 'Pain Point', 'Pain Points'));
+    return { anzahl: schritte + painPoints, text: teile.join(' und ') };
+  }
+
+  /** Auswahlliste der Quellen für Schritte, Pain Points und das Listen-Formular. */
+  function quellenOptionen() {
+    return zustand.map.quellen.map((q, i) => ({
+      wert: q.id,
+      label: 'Q' + (i + 1) + ': ' + kuerzen(q.bezeichnung || '(ohne Bezeichnung)', 60),
+    }));
   }
 
   function renderMaterial(panel) {
@@ -655,7 +681,8 @@
     fuellen(panel, 
       panelKopf(
         '2 · Material sammeln und anonymisieren',
-        'Halte fest, woher dein Wissen stammt. Das Material selbst bleibt in eurer Ablage. Pain Points verweisen später auf diese Quellen.'
+        'Hier führst du das Quellenverzeichnis: Welche Unterlagen und Gespräche liegen der Map zugrunde? Das Material selbst bleibt in eurer Ablage. ' +
+          'Den Inhalt, z. B. die Prozessschritte, überträgst du im Reiter „Schritte“, einzeln oder als Liste. Schritte und Pain Points verweisen dann mit [Q1], [Q2] … auf diese Quellen.'
       ),
       sperrHinweis(),
       h(
@@ -678,7 +705,24 @@
         : h('p', {}, 'Noch keine Quellen erfasst.'),
       gesperrt ? null : h('button', { type: 'button', id: 'f-quelle-neu', onclick: quelleHinzufuegen }, '+ Quelle hinzufügen'),
       problemAnzeige('f-quelle-neu'),
-      weiter('schritte', 'Weiter: Schritte erfassen')
+      h(
+        'div',
+        { class: 'weiter' },
+        gesperrt
+          ? null
+          : h(
+              'button',
+              {
+                type: 'button',
+                onclick: () => {
+                  zustand.liste.offen = true;
+                  zeigeTab('schritte', 'f-liste-text');
+                },
+              },
+              'Prozessschritte als Liste übernehmen →'
+            ),
+        h('button', { type: 'button', class: 'primaer', onclick: () => zeigeTab('schritte') }, 'Weiter: Schritte erfassen →')
+      )
     );
   }
 
@@ -688,17 +732,15 @@
   }
 
   async function quelleLoeschen(q, kuerzel, genutzt) {
-    const frage = genutzt
-      ? 'Quelle ' + kuerzel + ' löschen? ' +
-        (genutzt === 1
-          ? 'Sie belegt einen Pain Point, der dann keinen Beleg mehr hat.'
-          : 'Sie belegt ' + genutzt + ' Pain Points, die dann keinen Beleg mehr haben.')
+    const frage = genutzt.anzahl
+      ? 'Quelle ' + kuerzel + ' löschen? Sie belegt ' + genutzt.text + '. Diese verlieren dann ihren Beleg.'
       : 'Quelle ' + kuerzel + ' löschen?';
     if (!(await bestaetigen(frage, 'Quelle löschen', true))) return;
     aendern(
       () => {
         zustand.map.quellen = zustand.map.quellen.filter((x) => x !== q);
         for (const schritt of zustand.map.schritte) {
+          if (schritt.quelleId === q.id) schritt.quelleId = '';
           for (const pp of schritt.painPoints) if (pp.quelleId === q.id) pp.quelleId = '';
         }
       },
@@ -716,6 +758,8 @@
       ['Phase', b.phase],
       ['Aktion *', b.aktion],
       ['Touchpoint *', b.touchpoint],
+      ['Interner Ablauf', b.intern],
+      ['Quelle des Schritts', b.schrittQuelle],
       ['Emotion *', emo.symbol + ' ' + emo.label],
       ['Pain Point', b.painPoint],
       ['Quelle (Beleg) *', b.quelle],
@@ -737,6 +781,7 @@
         { class: 'hilfe' },
         h('li', {}, 'Ein Schritt ist eine Handlung. Die Aktion aus Sicht der Nutzer*in formulieren, mit Verb.'),
         h('li', {}, 'Touchpoint ist der Ort oder Kanal, an dem der Schritt passiert.'),
+        h('li', {}, 'Interner Ablauf beschreibt, was dabei bei uns oder im System passiert. Er erscheint in der Map unter der Kundensicht.'),
         h('li', {}, 'Jeder Pain Point braucht eine Quelle aus dem Reiter „Material“.'),
         h('li', {}, 'Gedanken und Zitate sind optional. Zitate kurz halten und anonymisieren.')
       ),
@@ -838,10 +883,7 @@
 
   function painPointBereich(schritt, nr, gesperrt) {
     const m = zustand.map;
-    const quellenOptionen = m.quellen.map((q, i) => ({
-      wert: q.id,
-      label: 'Q' + (i + 1) + ': ' + kuerzen(q.bezeichnung || '(ohne Bezeichnung)', 60),
-    }));
+    const optionen = quellenOptionen();
     return h(
       'div',
       { class: 'feld' },
@@ -873,7 +915,7 @@
                   pflicht: true,
                   wert: pp.quelleId,
                   gesperrt,
-                  optionen: quellenOptionen,
+                  optionen,
                   leerText: m.quellen.length ? '– Quelle wählen –' : '– erst unter „Material“ Quellen anlegen –',
                   onInput: (v) =>
                     aendern(() => {
@@ -960,6 +1002,32 @@
         textFeld('aktion', { label: 'Aktion', pflicht: true, hilfe: 'Was tut die Person? Aus ihrer Sicht formulieren.' }),
         textFeld('touchpoint', { label: 'Touchpoint', pflicht: true, hilfe: 'Kanal oder Kontaktpunkt, z. B. Voicebot, Website, Brief.' })
       ),
+      h(
+        'div',
+        { class: 'raster' },
+        textFeld('intern', {
+          label: 'Interner Ablauf',
+          optional: true,
+          typ: 'textarea',
+          zeilen: 2,
+          hilfe: 'Was passiert dabei bei uns oder im System? z. B. „Voicebot legt einen Vorgang an“.',
+        }),
+        feld({
+          id: f('quelle'),
+          label: 'Quelle des Schritts',
+          optional: true,
+          typ: 'select',
+          wert: schritt.quelleId,
+          gesperrt,
+          optionen: quellenOptionen(),
+          leerText: m.quellen.length ? '– keine –' : '– erst unter „Material“ Quellen anlegen –',
+          hilfe: 'Woher wissen wir, dass es diesen Schritt gibt?',
+          onInput: (v) =>
+            aendern(() => {
+              schritt.quelleId = v;
+            }),
+        })
+      ),
       emotionFeld(schritt, gesperrt),
       painPointBereich(schritt, nr, gesperrt),
       h(
@@ -1032,7 +1100,7 @@
     fuellen(panel, 
       panelKopf(
         '3 · Schritte erfassen',
-        'Lege zuerst die Phasen an. Erfasse dann je Schritt Aktion, Touchpoint und Emotion. Jeder Pain Point braucht eine Quelle.'
+        'Lege zuerst die Phasen an. Erfasse dann je Schritt Aktion, Touchpoint und Emotion, einzeln oder als Liste. Jeder Pain Point braucht eine Quelle.'
       ),
       sperrHinweis(),
       ausfuellhilfe(),
@@ -1045,6 +1113,7 @@
         gesperrt ? null : h('button', { type: 'button', id: 'f-phase-neu', onclick: phaseHinzufuegen }, '+ Phase hinzufügen'),
         problemAnzeige('f-phase-neu')
       ),
+      listenFormular(gesperrt),
       m.phasen.map((p, i) => phaseBlock(p, i, gesperrt, nummern)),
       ohnePhase.length
         ? h(
@@ -1059,6 +1128,137 @@
           )
         : null,
       weiter('map', 'Weiter: Map ansehen')
+    );
+  }
+
+  function listenAnzahlText(text) {
+    const n = M.zeilenZuEintraegen(text).length;
+    if (!n) return 'Noch keine Zeilen erkannt.';
+    if (n > M.MAX_LISTENSCHRITTE) {
+      return n + ' Zeilen erkannt. Auf einmal werden höchstens ' + M.MAX_LISTENSCHRITTE + ' Schritte angelegt.';
+    }
+    return n === 1 ? '1 Zeile erkannt, daraus wird ein Schritt.' : n + ' Zeilen erkannt, daraus werden ' + n + ' Schritte.';
+  }
+
+  /** Formular „Schritte aus einer Liste übernehmen“, z. B. Prozessschritte aus einer Dokumentation. */
+  function listenFormular(gesperrt) {
+    if (gesperrt) return null;
+    const m = zustand.map;
+    const liste = zustand.liste;
+    if (!m.phasen.some((p) => p.id === liste.phaseId)) liste.phaseId = m.phasen.length ? m.phasen[0].id : '';
+    if (liste.quelleId && !m.quellen.some((q) => q.id === liste.quelleId)) liste.quelleId = '';
+    const anzahl = h('p', { class: 'hilfe', id: 'f-liste-anzahl', 'aria-live': 'polite' }, listenAnzahlText(liste.text));
+    const alsOptionen = [
+      ['aktion', 'Aktion: was die Kund*in tut'],
+      ['intern', 'Interner Ablauf: was bei uns oder im System passiert'],
+    ];
+    const details = h(
+      'details',
+      { class: 'karte', id: 'liste-formular', open: liste.offen },
+      h('summary', {}, 'Schritte aus einer Liste übernehmen, z. B. aus der Prozessdokumentation'),
+      h(
+        'p',
+        { class: 'hilfe' },
+        'Füge eine Liste ein, einen Schritt pro Zeile. Aufzählungszeichen und Nummern werden entfernt. ' +
+          'Touchpoint, Emotion und Pain Points ergänzt du danach je Schritt. Nur Schrittbezeichnungen einfügen, keine Rohdaten oder Gesprächsmitschriften.'
+      ),
+      feld({
+        id: 'f-liste-text',
+        label: 'Liste',
+        typ: 'textarea',
+        zeilen: 6,
+        wert: liste.text,
+        onInput: (v) => {
+          liste.text = v;
+          anzahl.textContent = listenAnzahlText(v);
+        },
+      }),
+      anzahl,
+      h(
+        'div',
+        { class: 'raster' },
+        h(
+          'fieldset',
+          { class: 'feld' },
+          h('legend', {}, 'Zeilen übernehmen als'),
+          alsOptionen.map(([wert, label]) => {
+            const id = 'f-liste-als-' + wert;
+            const radio = h('input', { type: 'radio', name: 'f-liste-als', id, value: wert, checked: liste.als === wert });
+            radio.addEventListener('change', () => {
+              liste.als = wert;
+            });
+            return h('div', { class: 'checkbox-feld' }, radio, h('label', { for: id }, label));
+          })
+        ),
+        h(
+          'div',
+          {},
+          feld({
+            id: 'f-liste-phase',
+            label: 'In Phase',
+            typ: 'select',
+            leerOption: false,
+            wert: liste.phaseId,
+            optionen: m.phasen.map((p, i) => ({ wert: p.id, label: 'Phase ' + (i + 1) + ': ' + phasenName(p) })),
+            onInput: (v) => {
+              liste.phaseId = v;
+            },
+          }),
+          feld({
+            id: 'f-liste-quelle',
+            label: 'Quelle für alle Schritte',
+            optional: true,
+            typ: 'select',
+            wert: liste.quelleId,
+            optionen: quellenOptionen(),
+            leerText: '– keine –',
+            onInput: (v) => {
+              liste.quelleId = v;
+            },
+          })
+        )
+      ),
+      m.phasen.length
+        ? h('button', { type: 'button', class: 'primaer', onclick: listeUebernehmen }, 'Schritte anlegen')
+        : h('p', { class: 'hilfe' }, 'Lege zuerst oben eine Phase an.')
+    );
+    details.addEventListener('toggle', () => {
+      liste.offen = details.open;
+    });
+    return details;
+  }
+
+  function listeUebernehmen() {
+    const m = zustand.map;
+    const liste = zustand.liste;
+    const eintraege = M.zeilenZuEintraegen(liste.text);
+    if (!eintraege.length) {
+      melden('Die Liste ist leer. Füge mindestens eine Zeile ein.', true);
+      fokussieren('f-liste-text');
+      return;
+    }
+    if (!m.phasen.some((p) => p.id === liste.phaseId)) {
+      melden('Bitte zuerst eine Phase anlegen und auswählen.', true);
+      return;
+    }
+    let neu = [];
+    const als = liste.als;
+    aendern(
+      () => {
+        neu = M.schritteAusListe(m, { text: liste.text, als, phaseId: liste.phaseId, quelleId: liste.quelleId });
+        liste.text = '';
+        liste.offen = false;
+      },
+      { neuZeichnen: true }
+    );
+    fokussieren('h-schritt-' + neu[0].id);
+    melden(
+      mehrzahl(neu.length, 'Schritt', 'Schritte') +
+        ' angelegt' +
+        (eintraege.length > neu.length ? ' (die ersten ' + neu.length + ' von ' + eintraege.length + ' Zeilen)' : '') +
+        '. Ergänze jetzt ' +
+        (als === 'intern' ? 'die Aktion aus Sicht der Kund*innen, ' : '') +
+        'Touchpoint und Emotion.'
     );
   }
 
@@ -1213,6 +1413,7 @@
 
     const hatGedanken = m.schritte.some((x) => x.gedanken.trim());
     const hatZitate = m.schritte.some((x) => x.zitat.trim());
+    const hatIntern = m.schritte.some((x) => x.intern.trim());
 
     const emotionZellen = spalten.map((x, i) => {
       const wert = (sp) => (sp && sp.emotion !== null ? sp.emotion : null);
@@ -1255,7 +1456,18 @@
       h(
         'tbody',
         {},
-        zeile('Aktion', zellen((x) => textOderLeer(x.aktion), 'Noch keine Schritte')),
+        zeile(
+          'Aktion',
+          zellen(
+            (x) => [
+              textOderLeer(x.aktion),
+              x.quelleId && M.quellenKuerzel(m, x.quelleId)
+                ? [' ', h('span', { class: 'quelle-ref' }, '[' + M.quellenKuerzel(m, x.quelleId) + ']')]
+                : null,
+            ],
+            'Noch keine Schritte'
+          )
+        ),
         zeile('Touchpoint', zellen((x) => textOderLeer(x.touchpoint))),
         hatGedanken ? zeile('Gedanken', zellen((x) => textOderLeer(x.gedanken))) : null,
         zeile('Emotion', emotionZellen),
@@ -1279,7 +1491,15 @@
               : '—'
           )
         ),
-        hatZitate ? zeile('Zitate', zellen((x) => (x.zitat.trim() ? h('span', { class: 'zitat' }, x.zitat) : '—'))) : null
+        hatZitate ? zeile('Zitate', zellen((x) => (x.zitat.trim() ? h('span', { class: 'zitat' }, x.zitat) : '—'))) : null,
+        hatIntern
+          ? h(
+              'tr',
+              { class: 'trenner' },
+              h('th', { scope: 'row' }, 'Interner Ablauf', h('span', { class: 'zeilen-hinweis' }, 'für Kund*innen nicht sichtbar')),
+              zellen((x) => textOderLeer(x.intern))
+            )
+          : null
       )
     );
 
@@ -1909,6 +2129,7 @@
     zustand.alleZeigen = !o.neu;
     zustand.freigabeDurch = '';
     zustand.statusNotiz = '';
+    zustand.liste = leereListe();
     zustand.pruefung = P.pruefen(map);
     zeigeTab(o.tab || 'rahmen');
     if (meldung) melden(meldung);

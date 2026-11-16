@@ -155,6 +155,13 @@
         add('rueckfrage', 'schritte', f('touchpoint'), ort, 'Touchpoint fehlt. Über welchen Kanal oder Kontaktpunkt läuft der Schritt?');
       }
       if (s.emotion === null) add('fehlt', 'schritte', f('emotion'), ort, 'Emotion fehlt.');
+      if (!leer(s.quelleId)) {
+        if (!quellenIds.has(s.quelleId)) {
+          add('rueckfrage', 'schritte', f('quelle'), ort, 'Die Quelle des Schritts gibt es nicht mehr.', 'inhalt');
+        } else {
+          genutzteQuellen.add(s.quelleId);
+        }
+      }
 
       s.painPoints.forEach((pp, j) => {
         const ppOrt = ort + ', Pain Point ' + (j + 1);
@@ -196,7 +203,7 @@
       if (leer(q.bezeichnung)) add('fehlt', 'material', f('bezeichnung'), ort, 'Bezeichnung fehlt.');
       if (leer(q.art)) add('fehlt', 'material', f('art'), ort, 'Art der Quelle fehlt.');
       if (!q.anonymisiert) add('rueckfrage', 'material', f('anonymisiert'), ort, 'Anonymisierung ist noch nicht bestätigt.');
-      if (!genutzteQuellen.has(q.id)) add('hinweis', 'material', f('bezeichnung'), ort, 'Wird von keinem Pain Point genutzt.');
+      if (!genutzteQuellen.has(q.id)) add('hinweis', 'material', f('bezeichnung'), ort, 'Wird noch nirgends als Beleg genutzt, weder bei Schritten noch bei Pain Points.');
     });
     if (map.quellen.length) {
       const sichten = new Set(map.quellen.map((q) => (Modell.artInfo(q.art) || {}).sicht).filter(Boolean));
@@ -240,7 +247,7 @@
     );
     Modell.geordneteSchritte(map).forEach((s, i) => {
       const ort = 'Schritt ' + (i + 1);
-      const felder = { aktion: 'Aktion', touchpoint: 'Touchpoint', gedanken: 'Gedanken', zitat: 'Zitat' };
+      const felder = { aktion: 'Aktion', touchpoint: 'Touchpoint', intern: 'Interner Ablauf', gedanken: 'Gedanken', zitat: 'Zitat' };
       for (const [k, label] of Object.entries(felder)) {
         textfelder.push({ tab: 'schritte', feldId: 'f-schritt-' + s.id + '-' + k, ort: ort + ', ' + label, wert: s[k] });
       }

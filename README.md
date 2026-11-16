@@ -42,9 +42,9 @@ Eingaben bleiben im Browser und werden nicht auf einem Server gespeichert. Ohne 
 | Reiter | Was passiert dort | Schritte aus den Rahmendaten |
 |---|---|---|
 | 1 Rahmen | Titel, Anlass, Nutzergruppe, Start- und Endpunkt | 1 Anlass und Rahmen klären |
-| 2 Material | Quellen erfassen (nur Kurzbezeichnung), Anonymisierung je Quelle bestätigen, Lückencheck nach Sichten | 2 Material sammeln, 3 anonymisieren |
-| 3 Schritte | Phasen und Schritte: Aktion, Touchpoint, Emotion, Pain Points mit Quelle, optional Gedanken und Zitate; Ausfüllhilfe mit Beispielschritt | 4 Schritte erfassen |
-| 4 Map | Fertige Journey Map mit Emotionskurve; Export als PDF über den Druckdialog (A3 quer) | 5 Map erzeugen |
+| 2 Material | Quellenverzeichnis: welche Unterlagen und Gespräche der Map zugrunde liegen (nur Kurzbezeichnung, kein Inhalt), Anonymisierung je Quelle bestätigen, Lückencheck nach Sichten | 2 Material sammeln, 3 anonymisieren |
+| 3 Schritte | Phasen und Schritte: Aktion, Touchpoint, Emotion, Pain Points mit Quelle, optional interner Ablauf, Quelle des Schritts, Gedanken und Zitate. Schritte einzeln anlegen oder als Liste einfügen, z. B. Prozessschritte aus einer Dokumentation (als Aktion oder als interner Ablauf). Ausfüllhilfe mit Beispielschritt | 4 Schritte erfassen |
+| 4 Map | Fertige Journey Map mit Emotionskurve und, falls erfasst, einer Zeile „Interner Ablauf“ unter der Kundensicht; Quellen als [Q1] an Schritten und Pain Points; Export als PDF über den Druckdialog (A3 quer) | 5 Map erzeugen |
 | 5 Prüfung & Freigabe | Prüfpunkte, Rückmeldungen aus allen Kanälen, Status und Version, Versionshistorie, Checkliste „Erledigt“ | 6 prüfen lassen, 7 überarbeiten und freigeben |
 
 **Speichern:** „Speichern“ (oder Strg+S) lädt die Map als JSON-Datei herunter. Der Dateiname enthält Titel, Version und Stand, z. B. `journey-map_kontakt-voicebot_v0.2_2026-11-16.json`. Mit „Öffnen …“ lädst du sie wieder. Im Browser wird nichts gespeichert.

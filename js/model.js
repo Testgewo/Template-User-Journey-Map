@@ -127,6 +127,8 @@
       gedanken: '',
       zitat: '',
       painPoints: [],
+      quelleId: '',
+      intern: '',
     };
   }
 
@@ -183,6 +185,50 @@
     }
     for (const s of map.schritte) if (!phasenIds.has(s.phaseId)) ergebnis.push(s);
     return ergebnis;
+  }
+
+  /* ---------- Schritte aus einer Liste ---------- */
+
+  /** Höchstzahl der Schritte, die auf einmal aus einer Liste angelegt werden. */
+  const MAX_LISTENSCHRITTE = 50;
+
+  /*
+   * Aufzählungszeichen und Nummerierungen am Zeilenanfang: „- “, „• “, „1. “, „1) “, „(1) “, „1.2 “, „a) “.
+   * Eine Zahl ohne Satzzeichen („24 Stunden …“) bleibt stehen.
+   */
+  const LISTENPRAEFIX = /^(?:[-*•–·>▪◦]+|\(?\d{1,3}(?:\.\d{1,3})*[.):]|\d{1,3}(?:\.\d{1,3})+|[a-z]\))\s+/;
+
+  /** Zerlegt eingefügten Text in Einträge: eine Zeile je Schritt, ohne Aufzählungszeichen und Leerzeilen. */
+  function zeilenZuEintraegen(text) {
+    return String(text || '')
+      .split(/\r?\n/)
+      .map((zeile) =>
+        zeile
+          .replace(/\t+/g, ' ')
+          .trim()
+          .replace(LISTENPRAEFIX, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+      )
+      .filter(Boolean);
+  }
+
+  /**
+   * Legt aus einer Liste neue Schritte in einer Phase an.
+   * o: text, als ('aktion' | 'intern'), phaseId, quelleId (optional). Liefert die neuen Schritte.
+   */
+  function schritteAusListe(map, o) {
+    const neu = zeilenZuEintraegen(o.text)
+      .slice(0, MAX_LISTENSCHRITTE)
+      .map((eintrag) => {
+        const schritt = neuerSchritt(o.phaseId);
+        if (o.als === 'intern') schritt.intern = eintrag;
+        else schritt.aktion = eintrag;
+        schritt.quelleId = o.quelleId || '';
+        return schritt;
+      });
+    map.schritte.push(...neu);
+    return neu;
   }
 
   function quellenKuerzel(map, quelleId) {
@@ -425,6 +471,8 @@
           text: str(pp.text),
           quelleId: str(pp.quelleId),
         })),
+        quelleId: str(s.quelleId),
+        intern: str(s.intern),
       })),
       quellen: arr(roh.quellen).map((q) => ({
         id: id(q.id, 'q'),
@@ -490,6 +538,9 @@
     neueRueckmeldung,
     leereMap,
     geordneteSchritte,
+    MAX_LISTENSCHRITTE,
+    zeilenZuEintraegen,
+    schritteAusListe,
     quellenKuerzel,
     artInfo,
     naechsteNebenversion,

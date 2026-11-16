@@ -111,7 +111,10 @@ test('sehr lange Texte und Zitate werden als mögliche Rohdaten gemeldet', () =>
 test('Lückencheck meldet fehlende Sichten als Hinweis', () => {
   const m = vollstaendigeMap();
   m.quellen = m.quellen.filter((q) => q.art !== 'interview');
-  for (const s of m.schritte) for (const pp of s.painPoints) if (pp.quelleId === 'q-interviews') pp.quelleId = 'q-workshop';
+  for (const s of m.schritte) {
+    if (s.quelleId === 'q-interviews') s.quelleId = 'q-workshop';
+    for (const pp of s.painPoints) if (pp.quelleId === 'q-interviews') pp.quelleId = 'q-workshop';
+  }
   const pr = P.pruefen(m);
   assert.equal(pr.vollstaendig, true);
   assert.ok(texte(pr, 'hinweis').some((t) => t.includes('Kundensicht')));
@@ -196,4 +199,77 @@ test('Dateiname enthält Titel, Version und Stand', () => {
     'journey-map_beispiel-fiktiv-schaden-telefonisch-melden-ueber_v0.2_2026-11-12.json'
   );
   assert.equal(M.dateiname(M.leereMap(), 'pdf').startsWith('journey-map_ohne-titel_v0.1_'), true);
+});
+
+test('Liste: Aufzählungszeichen, Nummern und Leerzeilen werden entfernt', () => {
+  const text = '- Anruf annehmen\n• Anliegen erfassen\n\n1. Kunde ruft an\n2) Weiterleitung\n(3) Ticket\n1.2 Vorgang anlegen\na) Prüfung\n24 Stunden warten\n   \n\tmit\tTabs';
+  assert.deepEqual(M.zeilenZuEintraegen(text), [
+    'Anruf annehmen',
+    'Anliegen erfassen',
+    'Kunde ruft an',
+    'Weiterleitung',
+    'Ticket',
+    'Vorgang anlegen',
+    'Prüfung',
+    '24 Stunden warten',
+    'mit Tabs',
+  ]);
+});
+
+test('Liste: Schritte werden als Aktion oder interner Ablauf mit Phase und Quelle angelegt', () => {
+  const m = vollstaendigeMap();
+  const vorher = m.schritte.length;
+  const alsAktion = M.schritteAusListe(m, { text: 'Ruft an\nNennt Anliegen', als: 'aktion', phaseId: 'ph-kontakt', quelleId: 'q-workshop' });
+  assert.equal(alsAktion.length, 2);
+  assert.equal(alsAktion[0].aktion, 'Ruft an');
+  assert.equal(alsAktion[0].intern, '');
+  assert.equal(alsAktion[0].phaseId, 'ph-kontakt');
+  assert.equal(alsAktion[0].quelleId, 'q-workshop');
+
+  const alsIntern = M.schritteAusListe(m, { text: 'Vorgang anlegen', als: 'intern', phaseId: 'ph-abschluss' });
+  assert.equal(alsIntern[0].intern, 'Vorgang anlegen');
+  assert.equal(alsIntern[0].aktion, '');
+  assert.equal(m.schritte.length, vorher + 3);
+
+  // neu angelegte Schritte sind noch unvollständig: Touchpoint, Emotion und ggf. Aktion fehlen
+  const fehlt = texte(P.pruefen(m));
+  assert.ok(fehlt.some((t) => t.includes('Aktion fehlt')));
+  assert.ok(fehlt.some((t) => t.includes('Touchpoint fehlt')));
+  assert.ok(fehlt.some((t) => t.includes('Emotion fehlt')));
+});
+
+test('Liste: höchstens 50 Schritte auf einmal', () => {
+  const m = M.leereMap();
+  const text = Array.from({ length: 60 }, (_, i) => 'Schritt ' + (i + 1)).join('\n');
+  assert.equal(M.schritteAusListe(m, { text, als: 'aktion', phaseId: m.phasen[0].id }).length, M.MAX_LISTENSCHRITTE);
+});
+
+test('Quelle eines Schritts zählt als Nutzung, eine gelöschte Quelle ist eine Rückfrage', () => {
+  const m = vollstaendigeMap();
+  // Q1 belegt nur noch einen Schritt, keinen Pain Point mehr
+  m.schritte[0].painPoints[0].quelleId = 'q-workshop';
+  assert.equal(m.schritte[0].quelleId, 'q-interviews');
+  assert.ok(!texte(P.pruefen(m), 'hinweis').some((t) => t.startsWith('Quelle Q1')));
+
+  m.schritte[0].quelleId = 'q-gibtsnicht';
+  assert.ok(texte(P.pruefen(m), 'rueckfrage').some((t) => t.includes('Quelle des Schritts gibt es nicht mehr')));
+});
+
+test('interner Ablauf wird auf Personenbezug geprüft', () => {
+  const m = vollstaendigeMap();
+  m.schritte[1].intern = 'Rückruf durch Frau Meier unter 030 1234567';
+  assert.ok(texte(P.pruefen(m), 'rueckfrage').some((t) => t.startsWith('Schritt 2, Interner Ablauf') && t.includes('Personenbezug')));
+});
+
+test('ältere Dateien ohne Quelle und internen Ablauf je Schritt lassen sich laden', () => {
+  const alt = B.beispielMap();
+  for (const s of alt.schritte) {
+    delete s.quelleId;
+    delete s.intern;
+  }
+  const r = M.ausJson(JSON.stringify(alt));
+  assert.ok(r.ok);
+  assert.equal(r.map.schritte[0].quelleId, '');
+  assert.equal(r.map.schritte[0].intern, '');
+  assert.equal(P.pruefen(r.map).vollstaendig, true);
 });
