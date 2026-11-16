@@ -1,0 +1,33 @@
+# Secrets und lokale Einstellungen
+.env
+.env.*
+!.env.example
+CLAUDE.local.md
+*.pem
+*.key
+
+# Abhängigkeiten und Build
+node_modules/
+vendor/
+__pycache__/
+.venv/
+bin/
+obj/
+dist/
+build/
+
+# Editor und System
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Daten (niemals Produktivdaten einchecken)
+*.sql
+*.dump
+*.bak
+
+# Gespeicherte Journey Maps nicht einchecken (können interne Inhalte enthalten)
+journey-map_*.json
+*.pdf
