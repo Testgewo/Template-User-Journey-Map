@@ -22,6 +22,14 @@
   const SVG_NS = 'http://www.w3.org/2000/svg';
   const MAX_DATEIGROESSE = 2 * 1024 * 1024;
 
+  /*
+   * Läuft die Seite als Artifact in claude.ai, gibt es window.claude. Dort sind Downloads nur über die
+   * Download-Funktion des Viewers möglich, und der Druckdialog lässt sich nicht öffnen.
+   * Lokal (Doppelklick auf index.html) gibt es window.claude nicht.
+   */
+  const IM_VIEWER = !!(window.claude && typeof window.claude.use === 'function');
+  const downloadsBereit = IM_VIEWER ? window.claude.use('downloads').catch(() => null) : Promise.resolve(null);
+
   const NAECHSTER_SCHRITT = {
     entwurf:
       'Vervollständige die Map. Sobald keine Prüfpunkte mehr offen sind, gibst du sie zur fachlichen Prüfung. ' +
@@ -110,7 +118,7 @@
     }, 50);
     melden.ausblenden = window.setTimeout(() => {
       el.textContent = '';
-    }, fehler ? 10000 : 6000);
+    }, Math.max(fehler ? 10000 : 6000, text.length * 70));
   }
 
   function fokussieren(id) {
@@ -679,11 +687,14 @@
     aendern(() => zustand.map.quellen.push(q), { neuZeichnen: true, fokus: 'f-quelle-' + q.id + '-bezeichnung' });
   }
 
-  function quelleLoeschen(q, kuerzel, genutzt) {
+  async function quelleLoeschen(q, kuerzel, genutzt) {
     const frage = genutzt
-      ? 'Quelle ' + kuerzel + ' löschen? Sie belegt ' + mehrzahl(genutzt, 'Pain Point', 'Pain Points') + ', die dann keinen Beleg mehr haben.'
+      ? 'Quelle ' + kuerzel + ' löschen? ' +
+        (genutzt === 1
+          ? 'Sie belegt einen Pain Point, der dann keinen Beleg mehr hat.'
+          : 'Sie belegt ' + genutzt + ' Pain Points, die dann keinen Beleg mehr haben.')
       : 'Quelle ' + kuerzel + ' löschen?';
-    if (!window.confirm(frage)) return;
+    if (!(await bestaetigen(frage, 'Quelle löschen', true))) return;
     aendern(
       () => {
         zustand.map.quellen = zustand.map.quellen.filter((x) => x !== q);
@@ -1071,7 +1082,7 @@
     fokusNachVerschieben('btn-ph-' + p.id, richtung);
   }
 
-  function phaseLoeschen(p, i, anzahl) {
+  async function phaseLoeschen(p, i, anzahl) {
     if (anzahl > 0) {
       melden(
         'Phase ' + (i + 1) + ' enthält noch ' + mehrzahl(anzahl, 'Schritt', 'Schritte') + '. Bitte die Schritte zuerst in eine andere Phase verschieben oder löschen.',
@@ -1079,7 +1090,7 @@
       );
       return;
     }
-    if (!window.confirm('Phase ' + (i + 1) + ' löschen?')) return;
+    if (!(await bestaetigen('Phase ' + (i + 1) + ' löschen?', 'Phase löschen', true))) return;
     aendern(
       () => {
         zustand.map.phasen = zustand.map.phasen.filter((x) => x !== p);
@@ -1111,8 +1122,8 @@
     fokusNachVerschieben('btn-s-' + schritt.id, richtung);
   }
 
-  function schrittLoeschen(schritt, nr) {
-    if (!window.confirm('Schritt ' + nr + ' löschen? Alle Angaben dieses Schritts gehen verloren.')) return;
+  async function schrittLoeschen(schritt, nr) {
+    if (!(await bestaetigen('Schritt ' + nr + ' löschen? Alle Angaben dieses Schritts gehen verloren.', 'Schritt löschen', true))) return;
     const phaseIndex = zustand.map.phasen.findIndex((p) => p.id === schritt.phaseId);
     aendern(
       () => {
@@ -1128,8 +1139,8 @@
     aendern(() => schritt.painPoints.push(pp), { neuZeichnen: true, fokus: 'f-pp-' + pp.id + '-text' });
   }
 
-  function painPointEntfernen(schritt, pp) {
-    if (pp.text.trim() && !window.confirm('Pain Point „' + kuerzen(pp.text, 60) + '“ entfernen?')) return;
+  async function painPointEntfernen(schritt, pp) {
+    if (pp.text.trim() && !(await bestaetigen('Pain Point „' + kuerzen(pp.text, 60) + '“ entfernen?', 'Entfernen', true))) return;
     aendern(
       () => {
         schritt.painPoints = schritt.painPoints.filter((x) => x !== pp);
@@ -1332,11 +1343,16 @@
 
   function renderMap(panel) {
     fuellen(panel, 
-      panelKopf('4 · Map', 'So sieht die Journey Map aus. Für den Export im Druckdialog „Als PDF speichern“ wählen, am besten im Format A3 quer.'),
+      panelKopf(
+        '4 · Map',
+        IM_VIEWER
+          ? 'So sieht die Journey Map aus. Für den PDF-Export sicherst du eine druckfertige Datei, öffnest sie im Browser und speicherst sie mit Strg+P als PDF (A3 quer).'
+          : 'So sieht die Journey Map aus. Für den Export im Druckdialog „Als PDF speichern“ wählen, am besten im Format A3 quer.'
+      ),
       h(
         'div',
         { class: 'map-werkzeuge' },
-        h('button', { type: 'button', class: 'primaer', onclick: exportieren }, 'Als PDF exportieren …'),
+        h('button', { type: 'button', class: 'primaer', onclick: exportieren }, IM_VIEWER ? 'Druckfertige Datei sichern …' : 'Als PDF exportieren …'),
         h('p', {}, 'Der Export wird mit Version und Datum in der Versionshistorie vermerkt.')
       ),
       zustand.pruefung.vollstaendig
@@ -1359,8 +1375,66 @@
     document.getElementById('druck').replaceChildren(mapDokument(zustand.map, 'druck'));
   }
 
-  function exportieren() {
+  function htmlText(text) {
+    return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  /** Stile dieser Seite als Text, für die exportierte Datei. */
+  async function seitenStile() {
+    let css = '';
+    for (const blatt of Array.from(document.styleSheets)) {
+      try {
+        css += Array.from(blatt.cssRules)
+          .map((r) => r.cssText)
+          .join('\n') + '\n';
+      } catch (e) {
+        // Stylesheet nicht lesbar (z. B. andere Herkunft): unten nachladen
+      }
+    }
+    if (!css.includes('.jm')) {
+      try {
+        const antwort = await fetch('css/app.css');
+        if (antwort.ok) css += await antwort.text();
+      } catch (e) {
+        // ohne Stile weiter; die Map bleibt lesbar
+      }
+    }
+    return css;
+  }
+
+  /** Eigenständige HTML-Datei der Map mit den Stilen dieser Seite, zum Drucken als PDF. Ohne Skripte. */
+  async function exportHtml(m) {
+    const css = (await seitenStile()).replace(/<\/style/gi, '<\\/style');
+    const huelle = h('div', {}, mapDokument(m, 'druck'));
+    const titel = M.dateiname(m, 'html').replace(/\.html$/, '');
+    return (
+      '<!doctype html>\n<html lang="de">\n<head>\n<meta charset="utf-8">\n' +
+      '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
+      '<title>' + htmlText(titel) + '</title>\n<style>\n' + css + '</style>\n</head>\n<body class="export">\n' +
+      '<p class="export-hinweis">Als PDF speichern: Strg+P (Mac: Cmd+P), Ziel „Als PDF speichern“, Format A3 quer.</p>\n' +
+      '<div id="druck">' + huelle.innerHTML + '</div>\n</body>\n</html>\n'
+    );
+  }
+
+  function exportVermerkSetzen() {
+    M.exportVermerken(zustand.map);
+    zustand.geaendert = true;
+    neuBewerten();
+    renderAktivenTab();
+  }
+
+  async function exportieren() {
     const m = zustand.map;
+    if (IM_VIEWER) {
+      const name = M.dateiname(m, 'html');
+      if (!(await dateiAnbieten(name, await exportHtml(m), 'text/html'))) return;
+      exportVermerkSetzen();
+      melden(
+        'Druckfertige Datei „' + name + '“ gesichert. Öffne sie im Browser und speichere sie mit Strg+P als PDF. ' +
+          'Speichere danach die Map, damit der Export-Vermerk erhalten bleibt.'
+      );
+      return;
+    }
     M.exportVermerken(m);
     zustand.geaendert = true;
     neuBewerten();
@@ -1421,7 +1495,7 @@
     });
   }
 
-  function aktionKlick(key) {
+  async function aktionKlick(key) {
     const m = zustand.map;
     const gruende = M.hindernisse(m, key, zustand.pruefung, { durch: zustand.freigabeDurch });
     if (gruende.length) {
@@ -1435,7 +1509,7 @@
       freigeben: 'Version ' + M.naechsteHauptversion(nr) + ' freigeben? Danach ist der Inhalt gesperrt.',
       neueFassung: 'Neue Fassung beginnen? Die Map wird wieder bearbeitbar und erhält Version ' + M.naechsteNebenversion(nr) + '.',
     };
-    if (!window.confirm(fragen[key])) return;
+    if (!(await bestaetigen(fragen[key], M.AKTIONEN[key].label))) return;
     aendern(() => M.aktionAusfuehren(m, key, { durch: zustand.freigabeDurch, notiz: zustand.statusNotiz }), {
       inhalt: false,
     });
@@ -1671,8 +1745,8 @@
     aendern(() => zustand.map.rueckmeldungen.push(r), { inhalt: false, neuZeichnen: true, fokus: 'f-rm-' + r.id + '-text' });
   }
 
-  function rueckmeldungLoeschen(r, nr) {
-    if (!window.confirm('Rückmeldung ' + nr + ' löschen?')) return;
+  async function rueckmeldungLoeschen(r, nr) {
+    if (!(await bestaetigen('Rückmeldung ' + nr + ' löschen?', 'Rückmeldung löschen', true))) return;
     aendern(
       () => {
         zustand.map.rueckmeldungen = zustand.map.rueckmeldungen.filter((x) => x !== r);
@@ -1789,8 +1863,43 @@
 
   /* ================= Dateien ================= */
 
-  function verwerfenOk() {
-    return !zustand.geaendert || window.confirm('Es gibt ungespeicherte Änderungen. Trotzdem fortfahren? Die Änderungen gehen verloren.');
+  async function verwerfenOk() {
+    return (
+      !zustand.geaendert ||
+      bestaetigen('Es gibt ungespeicherte Änderungen. Sie gehen verloren, wenn du fortfährst.', 'Änderungen verwerfen', true)
+    );
+  }
+
+  /**
+   * Bietet eine Datei zum Speichern an.
+   * Als gehostete Seite (claude.ai) über die Download-Funktion des Viewers, lokal über einen Download-Link.
+   * Liefert true, wenn die Datei übergeben wurde.
+   */
+  async function dateiAnbieten(name, inhalt, typ) {
+    if (IM_VIEWER) {
+      const downloads = await downloadsBereit;
+      if (!downloads) {
+        melden('Speichern ist in dieser Ansicht nicht möglich. Öffne die Seite in claude.ai.', true);
+        return false;
+      }
+      try {
+        await downloads.save({ filename: name, data: inhalt });
+        return true;
+      } catch (fehler) {
+        const code = fehler && fehler.code;
+        if (code === 'declined') melden('Speichern abgebrochen.');
+        else if (code === 'rate_limited') melden('Es ist schon ein Speicherdialog offen. Bitte kurz warten.', true);
+        else melden('Die Datei konnte nicht gespeichert werden.', true);
+        return false;
+      }
+    }
+    const url = URL.createObjectURL(new Blob([inhalt], { type: typ }));
+    const a = h('a', { href: url, download: name, hidden: true });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+    return true;
   }
 
   function laden(map, meldung, optionen) {
@@ -1805,22 +1914,16 @@
     if (meldung) melden(meldung);
   }
 
-  function speichern() {
+  async function speichern() {
     const name = M.dateiname(zustand.map, 'json');
-    const blob = new Blob([M.zuJson(zustand.map)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = h('a', { href: url, download: name, hidden: true });
-    document.body.append(a);
-    a.click();
-    a.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+    if (!(await dateiAnbieten(name, M.zuJson(zustand.map), 'application/json'))) return;
     zustand.geaendert = false;
     renderKopf();
     melden('Gespeichert als „' + name + '“ (im Download-Ordner).');
   }
 
-  function oeffnen() {
-    if (!verwerfenOk()) return;
+  async function oeffnen() {
+    if (!(await verwerfenOk())) return;
     const eingabe = document.getElementById('datei-eingabe');
     eingabe.value = '';
     eingabe.click();
@@ -1846,20 +1949,75 @@
       .catch(() => melden('Die Datei konnte nicht gelesen werden.', true));
   }
 
-  function neu() {
-    if (!verwerfenOk()) return;
+  async function neu() {
+    if (!(await verwerfenOk())) return;
     laden(M.leereMap(), 'Neue, leere Journey Map angelegt.', { neu: true, tab: 'rahmen' });
   }
 
-  function beispielLaden() {
-    if (!verwerfenOk()) return;
-    const ergebnis = M.ausJson(JSON.stringify(B.beispielMap()));
-    laden(ergebnis.map, 'Fiktives Beispiel geladen. Es dient nur zur Orientierung.', { tab: 'map' });
+  function beispielMap() {
+    return M.ausJson(JSON.stringify(B.beispielMap())).map;
+  }
+
+  async function beispielLaden() {
+    if (!(await verwerfenOk())) return;
+    laden(beispielMap(), 'Fiktives Beispiel geladen. Es dient nur zur Orientierung.', { tab: 'map' });
+  }
+
+  /* ================= Bestätigungsdialog ================= */
+
+  /**
+   * Eigener Dialog statt window.confirm (der in eingebetteten Seiten nicht angezeigt wird).
+   * Liefert ein Promise mit true (bestätigt) oder false (abgebrochen).
+   */
+  function bestaetigen(text, okText, gefahr) {
+    const dlg = document.getElementById('bestaetigung');
+    const ok = document.getElementById('bestaetigung-ok');
+    const abbrechen = document.getElementById('bestaetigung-abbrechen');
+    const vorher = document.activeElement;
+    document.getElementById('bestaetigung-text').textContent = text;
+    ok.textContent = okText || 'OK';
+    ok.className = gefahr ? 'gefahr-primaer' : 'primaer';
+    return new Promise((resolve) => {
+      let erledigt = false;
+      const fertig = (wert) => {
+        if (erledigt) return;
+        erledigt = true;
+        if (dlg.open) dlg.close();
+        if (!wert && vorher && document.contains(vorher)) vorher.focus();
+        resolve(wert);
+      };
+      ok.onclick = () => fertig(true);
+      abbrechen.onclick = () => fertig(false);
+      dlg.oncancel = (e) => {
+        e.preventDefault();
+        fertig(false);
+      };
+      dlg.showModal();
+      abbrechen.focus();
+    });
+  }
+
+  function baueDialog() {
+    document.body.append(
+      h(
+        'dialog',
+        { id: 'bestaetigung', class: 'dialog', 'aria-labelledby': 'bestaetigung-titel', 'aria-describedby': 'bestaetigung-text' },
+        h('h2', { id: 'bestaetigung-titel' }, 'Bitte bestätigen'),
+        h('p', { id: 'bestaetigung-text' }),
+        h(
+          'div',
+          { class: 'dialog-aktionen' },
+          h('button', { type: 'button', id: 'bestaetigung-abbrechen' }, 'Abbrechen'),
+          h('button', { type: 'button', id: 'bestaetigung-ok', class: 'primaer' }, 'OK')
+        )
+      )
+    );
   }
 
   /* ================= Start ================= */
 
   function start() {
+    baueDialog();
     baueTabs();
     document.getElementById('btn-neu').addEventListener('click', neu);
     document.getElementById('btn-oeffnen').addEventListener('click', oeffnen);
@@ -1882,8 +2040,17 @@
     window.addEventListener('beforeprint', druckvorbereiten);
     window.addEventListener('afterprint', () => document.getElementById('druck').replaceChildren());
 
-    zustand.pruefung = P.pruefen(zustand.map);
-    zeigeTab('rahmen');
+    // Als gehostete Seite mit dem fiktiven Beispiel starten, damit sofort sichtbar ist, was die Vorlage kann.
+    const inhalt = document.getElementById('inhalt');
+    if (inhalt && inhalt.getAttribute('data-start') === 'beispiel') {
+      zustand.map = beispielMap();
+      zustand.alleZeigen = true;
+      zustand.pruefung = P.pruefen(zustand.map);
+      zeigeTab('map');
+    } else {
+      zustand.pruefung = P.pruefen(zustand.map);
+      zeigeTab('rahmen');
+    }
   }
 
   start();

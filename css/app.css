@@ -3,10 +3,13 @@
  * Schriften werden nicht von außen geladen (keine Datenübertragung an Dritte).
  */
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   --schrift: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --abstand: 1rem;
   --radius: 8px;
+  /* Seitenrand, der auf Handys auch Systemleisten freihält */
+  --rand-links: max(16px, env(safe-area-inset-left, 0px));
+  --rand-rechts: max(16px, env(safe-area-inset-right, 0px));
 
   --farbe-primaer: #0b5cad;
   --farbe-primaer-hover: #084a8c;
@@ -39,8 +42,13 @@
   --phase-b: #eef2f7;
 }
 
+/*
+ * Dunkelmodus: folgt der Systemeinstellung, eine ausdrückliche Wahl (data-theme am Wurzelelement,
+ * z. B. in claude.ai) hat Vorrang. Beide Blöcke enthalten dieselben Werte.
+ */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
     --farbe-primaer: #8ab8ff;
     --farbe-primaer-hover: #a9caff;
     --farbe-primaer-kontrast: #0b1a2e;
@@ -71,6 +79,39 @@
     --phase-a: #1d2b3d;
     --phase-b: #262b33;
   }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --farbe-primaer: #8ab8ff;
+  --farbe-primaer-hover: #a9caff;
+  --farbe-primaer-kontrast: #0b1a2e;
+  --farbe-text: #e8eaed;
+  --farbe-text-leise: #b0b7c1;
+  --farbe-hintergrund: #121417;
+  --farbe-flaeche: #1c1f24;
+  --farbe-flaeche-2: #23272d;
+  --farbe-rand: #3b424c;
+  --farbe-rand-stark: #6b7480;
+  --farbe-fokus: #8ab8ff;
+
+  --fehlt-text: #ffb4ab;
+  --fehlt-flaeche: #3d1a17;
+  --rueckfrage-text: #ffcf8a;
+  --rueckfrage-flaeche: #3a2a10;
+  --hinweis-text: #a9caff;
+  --hinweis-flaeche: #172a44;
+  --ok-text: #9fe0b0;
+  --ok-flaeche: #15301e;
+
+  --emo-m2: #ff8a80;
+  --emo-m1: #ffb36b;
+  --emo-0: #b0b7c1;
+  --emo-p1: #a5d98f;
+  --emo-p2: #6fd48f;
+
+  --phase-a: #1d2b3d;
+  --phase-b: #262b33;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -240,7 +281,9 @@ textarea[disabled] {
 .kopf {
   background: var(--farbe-flaeche);
   border-bottom: 1px solid var(--farbe-rand);
-  padding: 0.75rem var(--abstand);
+  padding-block: 0.75rem;
+  padding-left: var(--rand-links);
+  padding-right: var(--rand-rechts);
 }
 .kopf-zeile,
 .dokument-zeile {
@@ -337,9 +380,19 @@ textarea[disabled] {
 
 /* ---------- Tabs ---------- */
 
+/* Band über der festen Reiterleiste, damit auf Handys nichts unter der Statusleiste durchscrollt */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0 0 auto;
+  height: env(safe-area-inset-top, 0px);
+  z-index: 10;
+  background: var(--farbe-flaeche);
+}
+
 .tab-leiste {
   position: sticky;
-  top: 0;
+  top: env(safe-area-inset-top, 0px);
   z-index: 10;
   background: var(--farbe-flaeche);
   border-bottom: 1px solid var(--farbe-rand);
@@ -350,7 +403,8 @@ textarea[disabled] {
   overflow-x: auto;
   max-width: 80rem;
   margin-inline: auto;
-  padding: 0 var(--abstand);
+  padding-left: var(--rand-links);
+  padding-right: var(--rand-rechts);
 }
 [role='tab'] {
   border: none;
@@ -391,7 +445,9 @@ textarea[disabled] {
 main {
   max-width: 80rem;
   margin-inline: auto;
-  padding: var(--abstand);
+  padding-block: var(--abstand);
+  padding-left: var(--rand-links);
+  padding-right: var(--rand-rechts);
 }
 main:focus {
   outline: none;
@@ -1060,7 +1116,7 @@ table.jm {
 .meldung {
   position: fixed;
   left: 50%;
-  bottom: 1rem;
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
   max-width: min(36rem, calc(100% - 2rem));
   z-index: 50;
@@ -1080,13 +1136,60 @@ table.jm {
 .fuss {
   max-width: 80rem;
   margin: 2rem auto 0;
-  padding: 1rem var(--abstand) 4rem;
+  padding-block: 1rem 4rem;
+  padding-left: var(--rand-links);
+  padding-right: var(--rand-rechts);
   font-size: 0.85rem;
   color: var(--farbe-text-leise);
 }
 
 #druck {
   display: none;
+}
+
+/* Exportierte, druckfertige Datei (Artifact-Fassung) */
+.export {
+  padding-block: 1rem;
+  padding-left: var(--rand-links);
+  padding-right: var(--rand-rechts);
+}
+.export #druck {
+  display: block;
+}
+.export-hinweis {
+  padding: 0.6rem 0.9rem;
+  border-radius: var(--radius);
+  background: var(--hinweis-flaeche);
+  color: var(--hinweis-text);
+}
+
+/* Bestätigungsdialog */
+.dialog {
+  width: min(30rem, calc(100% - 32px));
+  border: 1px solid var(--farbe-rand);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  background: var(--farbe-flaeche);
+  color: var(--farbe-text);
+}
+.dialog::backdrop {
+  background: rgb(0 0 0 / 45%);
+}
+.dialog h2 {
+  font-size: 1.15rem;
+}
+.dialog-aktionen {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+button.gefahr-primaer {
+  background: var(--fehlt-text);
+  border-color: var(--fehlt-text);
+  color: var(--farbe-flaeche);
+  font-weight: 600;
 }
 
 @media (max-width: 40rem) {
@@ -1107,7 +1210,9 @@ table.jm {
     margin: 10mm;
   }
 
-  :root {
+  :root,
+  :root:not([data-theme='light']),
+  :root[data-theme='dark'] {
     color-scheme: light;
     --farbe-primaer: #0b5cad;
     --farbe-text: #000000;

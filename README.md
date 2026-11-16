@@ -14,6 +14,16 @@ Es gibt keine Installation, keinen Server und keine fremden Pakete. Die App läd
 
 Zum Ausprobieren oben auf **Beispiel laden** klicken. Es lädt eine frei erfundene Voicebot-Journey.
 
+### Als Seite in claude.ai
+
+`artifact.html` ist dieselbe Vorlage als private Seite (Artifact) in claude.ai. Sie nutzt dieselben Dateien unter `css/` und `js/` und unterscheidet sich in drei Punkten:
+
+- Sie startet mit dem fiktiven Beispiel.
+- „Speichern“ und der Export laufen über die Download-Funktion von claude.ai. Jeder Download wird bestätigt.
+- Der Druckdialog lässt sich dort nicht öffnen. Statt des PDF-Exports sicherst du eine druckfertige HTML-Datei. Die öffnest du im Browser und speicherst sie mit Strg+P als PDF (A3 quer).
+
+Eingaben bleiben im Browser und werden nicht auf einem Server gespeichert. Ohne „Speichern“ sind sie beim Neuladen weg.
+
 ## So funktioniert es
 
 | Reiter | Was passiert dort | Schritte aus den Rahmendaten |
@@ -60,4 +70,5 @@ node --test
 
 - [TODO: Farben und Schrift aus dem Gewobag-Corporate-Design übernehmen (`css/app.css`, Design-Tokens oben).]
 - [TODO: Verantwortliche Person bzw. Team eintragen.]
+- Die Seite in claude.ai ist privat. Teilst du den Link mit Kolleg*innen, nutzen andere die Vorlage. Dann gilt der nächste Punkt.
 - Sollen später andere die Vorlage nutzen (UX-Team, Fachbereich), wird aus dem Prototyp eine Anwendung für andere. Dann kommen dazu: Ablage in Azure DevOps, vollständige Sicherheitsprüfung, TypeScript mit Build und Tests, installierbar als App (PWA) und Betrieb auf einem internen Server statt Datei-Austausch.
