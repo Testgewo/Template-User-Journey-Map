@@ -1830,11 +1830,15 @@ body[data-tab='map'] main {
 }
 .jm-kurven-marke.tief {
   background: var(--emo-m2);
-  transform: translate(-50%, 1.5rem);
 }
 .jm-kurven-marke.hoch {
   background: var(--emo-p2);
-  transform: translate(-50%, -2.7rem);
+}
+.jm-kurven-marke.rechts {
+  transform: translate(1.6rem, -50%);
+}
+.jm-kurven-marke.links {
+  transform: translate(calc(-100% - 1.6rem), -50%);
 }
 
 /* Pain Points */
@@ -2072,21 +2076,46 @@ button.gefahr-primaer {
   }
   /* Map füllt die Seitenbreite; Spalten teilen sich den Platz */
   .jm-raster {
-    --label: 24mm;
+    --label: 22mm;
     grid-template-columns: var(--label) repeat(var(--spalten, 1), minmax(0, 1fr));
     min-width: 0;
     column-gap: 2mm;
-    row-gap: 2mm;
+    row-gap: 1.5mm;
   }
   .jm-buehne {
     overflow: visible;
   }
   .jm-doc {
-    gap: 4mm;
+    gap: 3mm;
     font-size: 8.5pt;
   }
   .jm-titel {
-    font-size: 17pt;
+    font-size: 15pt;
+  }
+  .jm-anlass {
+    max-width: none;
+    margin-bottom: 2mm;
+  }
+  .jm-fuss {
+    flex-wrap: nowrap;
+    gap: 2mm 8mm;
+  }
+  .jm-angaben {
+    flex-basis: auto;
+    order: 3;
+    max-width: 90mm;
+  }
+  .jm-reise-punkt,
+  .jm-persona,
+  .jm-kachel,
+  .jm-tiefpunkt {
+    padding: 1.2mm 2mm;
+  }
+  .jm-fuss {
+    padding-top: 2mm;
+  }
+  .jm-phase {
+    min-height: 9mm;
   }
   .jm-anlass,
   .jm-persona p,
@@ -2112,10 +2141,42 @@ button.gefahr-primaer {
     font-size: 8pt;
   }
   .jm-kurve {
-    padding-block: 5mm;
+    padding-block: 3mm;
   }
   .jm-kurve-flaeche {
-    height: 22mm;
+    height: 14mm;
+  }
+  .jm-kurven-marke {
+    font-size: 6.5pt;
+  }
+  .jm-kurven-marke.rechts {
+    transform: translate(5.5mm, -50%);
+  }
+  .jm-kurven-marke.links {
+    transform: translate(calc(-100% - 5.5mm), -50%);
+  }
+  .jm-gesicht {
+    width: 7mm;
+    height: 7mm;
+    font-size: 11pt;
+  }
+  .jm-gesicht.tief,
+  .jm-gesicht.hoch {
+    width: 8.5mm;
+    height: 8.5mm;
+    font-size: 13pt;
+  }
+  .jm-karte,
+  .jm-gedanke,
+  .jm-pp,
+  .jm-intern {
+    padding: 1.2mm 1.8mm;
+  }
+  .jm-zelle {
+    gap: 1.2mm;
+  }
+  .jm-sichtlinie {
+    margin-block: 1mm;
   }
   .jm-karte {
     box-shadow: none;

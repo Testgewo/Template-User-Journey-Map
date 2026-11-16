@@ -2229,7 +2229,9 @@
       gesicht.style.top = y(x.emotion) + '%';
       flaeche.append(gesicht);
       if (art) {
-        const marke = h('span', { class: 'jm-kurven-marke ' + art }, art === 'tief' ? 'Tiefpunkt' : 'Höhepunkt');
+        // Etikett neben das Gesicht, auf die Seite mit mehr Platz
+        const seite = i + 0.5 > n / 2 ? ' links' : ' rechts';
+        const marke = h('span', { class: 'jm-kurven-marke ' + art + seite }, art === 'tief' ? 'Tiefpunkt' : 'Höhepunkt');
         marke.style.left = links;
         marke.style.top = y(x.emotion) + '%';
         flaeche.append(marke);
