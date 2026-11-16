@@ -9,6 +9,7 @@
   const M = window.JMModell;
   const P = window.JMPruefung;
   const B = window.JMBeispiel;
+  const I = window.JMImport;
 
   const TABS = [
     { id: 'rahmen', label: 'Rahmen' },
@@ -57,7 +58,8 @@
 
   /** Eingaben im Formular „Schritte aus einer Liste übernehmen“ (gehören nicht zur Map). */
   function leereListe() {
-    return { text: '', als: 'aktion', phaseId: '', quelleId: '', offen: false };
+    // offen: null = automatisch (offen, solange es noch keine Schritte gibt); vorschau: ausgewertete Tabelle
+    return { text: '', als: 'aktion', phaseId: '', quelleId: '', offen: null, vorschau: null };
   }
 
   /* ================= DOM-Hilfen ================= */
@@ -439,7 +441,7 @@
       ['Anlass und Rahmen klären', 'Reiter „Rahmen“', ''],
       ['Material sammeln', 'Reiter „Material“: Quellenverzeichnis anlegen', 'Übergabe danach: Fachbereich → UX (Material und Prozesswissen)'],
       ['Material anonymisieren', 'Reiter „Material“: Anonymisierung je Quelle bestätigen', ''],
-      ['Schritte erfassen', 'Reiter „Schritte“: einzeln oder als Liste, z. B. aus der Prozessdokumentation', ''],
+      ['Schritte erfassen', 'Reiter „Schritte“: einzeln, als Liste oder aus einer Datei (Excel, Word, CSV, Text)', ''],
       ['Map erzeugen', 'Reiter „Map“', 'Übergabe danach: UX → Fachbereich (Entwurf zur Prüfung)'],
       ['Fachlich prüfen lassen', 'Reiter „Prüfung & Freigabe“', 'Übergabe danach: Fachbereich → UX (Rückmeldungen)'],
       ['Überarbeiten und freigeben lassen', 'Reiter „Prüfung & Freigabe“, danach Export unter „Map“', ''],
@@ -719,7 +721,7 @@
                   zeigeTab('schritte', 'f-liste-text');
                 },
               },
-              'Prozessschritte als Liste übernehmen →'
+              'Schritte aus Datei oder Liste übernehmen →'
             ),
         h('button', { type: 'button', class: 'primaer', onclick: () => zeigeTab('schritte') }, 'Weiter: Schritte erfassen →')
       )
@@ -1154,8 +1156,10 @@
     ];
     const details = h(
       'details',
-      { class: 'karte', id: 'liste-formular', open: liste.offen },
-      h('summary', {}, 'Schritte aus einer Liste übernehmen, z. B. aus der Prozessdokumentation'),
+      { class: 'karte', id: 'liste-formular', open: liste.offen === null ? !m.schritte.length : liste.offen },
+      h('summary', {}, 'Schritte übernehmen: aus einer Datei oder als Liste'),
+      dateiBereich(),
+      h('h4', { class: 'abschnitt' }, 'Als Liste einfügen'),
       h(
         'p',
         { class: 'hilfe' },
@@ -1248,6 +1252,7 @@
         neu = M.schritteAusListe(m, { text: liste.text, als, phaseId: liste.phaseId, quelleId: liste.quelleId });
         liste.text = '';
         liste.offen = false;
+        zustand.alleZeigen = true;
       },
       { neuZeichnen: true }
     );
@@ -1260,6 +1265,202 @@
         (als === 'intern' ? 'die Aktion aus Sicht der Kund*innen, ' : '') +
         'Touchpoint und Emotion.'
     );
+  }
+
+  /* ---------- Schritte aus einer Datei ---------- */
+
+  function dateiBereich() {
+    const liste = zustand.liste;
+    return h(
+      'div',
+      { class: 'datei-bereich' },
+      h('h4', { class: 'abschnitt' }, 'Aus einer Datei'),
+      h('p', { class: 'hilfe' }, 'Die Datei wird nur in deinem Browser gelesen. Sie wird nicht hochgeladen und nicht gespeichert.'),
+      h(
+        'ul',
+        { class: 'hilfe' },
+        h(
+          'li',
+          {},
+          h('strong', {}, 'Excel oder CSV: '),
+          'eine Zeile je Schritt, mit Spaltenüberschriften wie in der Vorlage (Phase, Aktion, Touchpoint, Emotion, Pain Points, Interner Ablauf, Quelle …). Andere Spalten werden nicht übernommen.'
+        ),
+        h('li', {}, h('strong', {}, 'Word: '), 'eine Tabelle mit einer Spalte „Aktion“ oder „Prozessschritt“, sonst die Aufzählungspunkte.'),
+        h('li', {}, h('strong', {}, 'Text: '), 'ein Schritt pro Zeile.'),
+        h('li', {}, h('strong', {}, 'PDF: '), 'Text kopieren und unten als Liste einfügen.')
+      ),
+      h(
+        'div',
+        { class: 'knopf-reihe' },
+        h('button', { type: 'button', id: 'f-import-datei', onclick: () => document.getElementById('import-datei').click() }, 'Datei auswählen …'),
+        h('button', { type: 'button', onclick: vorlageHerunterladen }, 'Tabellenvorlage herunterladen')
+      ),
+      liste.vorschau ? vorschauBereich(liste.vorschau) : null
+    );
+  }
+
+  function emotionVorschau(text) {
+    if (!text) return '—';
+    const wert = I.emotionAusText(text);
+    const e = M.EMOTIONEN.find((x) => x.wert === wert);
+    return e ? e.symbol + ' ' + e.label : text + ' (nicht lesbar)';
+  }
+
+  function vorschauBereich(v) {
+    const a = v.auswertung;
+    const m = zustand.map;
+    const anzahl = Math.min(a.datensaetze.length, M.MAX_LISTENSCHRITTE);
+    const zeigen = a.datensaetze.slice(0, 8);
+    const spalten = [
+      ['phase', 'Phase'],
+      ['aktion', 'Aktion'],
+      ['touchpoint', 'Touchpoint'],
+      ['emotion', 'Emotion'],
+      ['painPoints', 'Pain Points'],
+      ['intern', 'Interner Ablauf'],
+    ].filter(([k]) => a.datensaetze.some((d) => d[k]));
+    return h(
+      'section',
+      { class: 'vorschau', 'aria-labelledby': 'h-vorschau' },
+      h('h4', { id: 'h-vorschau', tabindex: '-1' }, 'Vorschau: „' + v.dateiname + '“'),
+      h(
+        'p',
+        {},
+        mehrzahl(a.datensaetze.length, 'Schritt', 'Schritte') +
+          ' erkannt (' +
+          a.herkunft +
+          ').' +
+          (a.datensaetze.length > M.MAX_LISTENSCHRITTE ? ' Übernommen werden die ersten ' + M.MAX_LISTENSCHRITTE + '.' : '')
+      ),
+      h(
+        'p',
+        { class: 'hilfe' },
+        'Übernommene Spalten: ' + a.spalten.join(', ') + '.' + (a.ignoriert.length ? ' Nicht übernommen: ' + a.ignoriert.join(', ') + '.' : '')
+      ),
+      h(
+        'div',
+        { class: 'tabelle-scroll', role: 'region', 'aria-label': 'Vorschau der Schritte', tabindex: '0' },
+        h(
+          'table',
+          { class: 'vorschau-tabelle' },
+          h('thead', {}, h('tr', {}, spalten.map(([, label]) => h('th', { scope: 'col' }, label)))),
+          h(
+            'tbody',
+            {},
+            zeigen.map((d, i) =>
+              h(
+                'tr',
+                {},
+                spalten.map(([k]) => {
+                  if (k === 'emotion') return h('td', {}, emotionVorschau(d.emotion));
+                  if (k === 'phase' && !d.phase && i > 0) return h('td', { class: 'leise' }, 'wie oben');
+                  return h('td', {}, d[k] || '—');
+                })
+              )
+            )
+          )
+        )
+      ),
+      a.datensaetze.length > zeigen.length ? h('p', { class: 'hilfe' }, '… und ' + (a.datensaetze.length - zeigen.length) + ' weitere.') : null,
+      !a.datensaetze[0].phase && m.phasen.length
+        ? feld({
+            id: 'f-vorschau-phase',
+            label: 'Zeilen ohne Phase am Anfang kommen in',
+            typ: 'select',
+            leerOption: false,
+            wert: zustand.liste.phaseId || m.phasen[0].id,
+            optionen: m.phasen.map((p, i) => ({ wert: p.id, label: 'Phase ' + (i + 1) + ': ' + phasenName(p) })),
+            onInput: (wert) => {
+              zustand.liste.phaseId = wert;
+            },
+          })
+        : null,
+      h(
+        'div',
+        { class: 'knopf-reihe' },
+        h('button', { type: 'button', class: 'primaer', onclick: tabelleUebernehmen }, (anzahl === 1 ? '1 Schritt' : anzahl + ' Schritte') + ' übernehmen'),
+        h('button', { type: 'button', onclick: vorschauVerwerfen }, 'Verwerfen')
+      )
+    );
+  }
+
+  async function importDateiGewaehlt(e) {
+    const eingabe = e.target;
+    const datei = eingabe.files && eingabe.files[0];
+    eingabe.value = '';
+    if (!datei) return;
+    let auswertung;
+    try {
+      auswertung = await I.dateiAuswerten(datei.name, await datei.arrayBuffer());
+    } catch (f) {
+      melden(f && f.nutzer ? f.message : 'Die Datei konnte nicht gelesen werden. Ist sie beschädigt?', true);
+      return;
+    }
+    const liste = zustand.liste;
+    liste.offen = true;
+    if (auswertung.art === 'tabelle') {
+      if (!auswertung.datensaetze.length) {
+        melden('In „' + datei.name + '“ gibt es Spaltenüberschriften, aber keine Zeilen mit Inhalt.', true);
+        return;
+      }
+      liste.vorschau = { dateiname: datei.name, auswertung };
+      renderAktivenTab('h-vorschau');
+      return;
+    }
+    if (!auswertung.zeilen.length) {
+      melden('In „' + datei.name + '“ wurde kein Text gefunden.', true);
+      return;
+    }
+    liste.vorschau = null;
+    liste.text = auswertung.zeilen.join('\n');
+    renderAktivenTab('f-liste-text');
+    melden(
+      mehrzahl(auswertung.zeilen.length, 'Zeile', 'Zeilen') +
+        ' aus „' +
+        datei.name +
+        '“ in die Liste übernommen' +
+        (auswertung.hinweis ? ' (' + auswertung.hinweis + ')' : '') +
+        '. Prüfe die Liste, lösche überflüssige Zeilen und lege dann die Schritte an.'
+    );
+  }
+
+  function vorschauVerwerfen() {
+    zustand.liste.vorschau = null;
+    renderAktivenTab('f-import-datei');
+  }
+
+  function tabelleUebernehmen() {
+    const v = zustand.liste.vorschau;
+    if (!v) return;
+    let erg = null;
+    aendern(
+      () => {
+        erg = I.schritteAusTabelle(zustand.map, v.auswertung.datensaetze, { phaseId: zustand.liste.phaseId });
+        zustand.liste.vorschau = null;
+        zustand.liste.offen = false;
+        zustand.alleZeigen = true;
+      },
+      { neuZeichnen: true }
+    );
+    if (erg.schritte.length) fokussieren('h-schritt-' + erg.schritte[0].id);
+    const teile = [mehrzahl(erg.schritte.length, 'Schritt', 'Schritte') + ' aus „' + v.dateiname + '“ übernommen.'];
+    if (erg.ueberzaehlig) {
+      teile.push(mehrzahl(erg.ueberzaehlig, 'weitere Zeile wurde', 'weitere Zeilen wurden') + ' nicht übernommen (höchstens ' + M.MAX_LISTENSCHRITTE + ' auf einmal).');
+    }
+    if (erg.neuePhasen.length) teile.push('Neue Phasen: ' + erg.neuePhasen.join(', ') + '.');
+    if (erg.neueQuellen.length) {
+      teile.push('Neue Quellen: ' + erg.neueQuellen.join(', ') + '. Bitte unter „Material“ Art und Anonymisierung ergänzen.');
+    }
+    if (erg.emotionUnklar) teile.push('Bei ' + mehrzahl(erg.emotionUnklar, 'Schritt', 'Schritten') + ' war die Emotion nicht lesbar.');
+    if (erg.quelleUnklar) teile.push(mehrzahl(erg.quelleUnklar, 'Quellenkürzel wurde', 'Quellenkürzel wurden') + ' nicht gefunden.');
+    teile.push('Was noch fehlt, ist jetzt markiert.');
+    melden(teile.join(' '));
+  }
+
+  async function vorlageHerunterladen() {
+    if (await dateiAnbieten('journey-map-schritte-vorlage.csv', I.vorlageCsv(), 'text/csv;charset=utf-8')) {
+      melden('Vorlage gespeichert. Öffne sie mit Excel, trage eine Zeile je Schritt ein und speichere sie als .xlsx oder .csv.');
+    }
   }
 
   function phaseHinzufuegen() {
@@ -2239,6 +2440,9 @@
 
   function start() {
     baueDialog();
+    const importEingabe = h('input', { type: 'file', id: 'import-datei', accept: '.xlsx,.xlsm,.csv,.txt,.docx', hidden: true });
+    importEingabe.addEventListener('change', importDateiGewaehlt);
+    document.body.append(importEingabe);
     baueTabs();
     document.getElementById('btn-neu').addEventListener('click', neu);
     document.getElementById('btn-oeffnen').addEventListener('click', oeffnen);

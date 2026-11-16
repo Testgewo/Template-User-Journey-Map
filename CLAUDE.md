@@ -16,11 +16,12 @@ Anforderungen: `docs/rahmendaten.md` (Canvas mit Auslöser, Rollen, Schritten, �
 - `js/model.js`: Datenmodell, Versionen, Status-Ablauf, JSON laden/speichern. Ohne DOM, auch in Node nutzbar.
 - `js/checks.js`: Prüfregeln (fehlt / Rückfrage / Hinweis), Erkennung möglicher Personendaten.
 - `js/beispiel.js`: fiktives Voicebot-Beispiel und Ausfüllhilfe.
+- `js/import.js`: Schritte aus Dateien (.xlsx, .csv, .docx, .txt). Bewusst ohne Fremdbibliothek: ZIP über die eingebaute `DecompressionStream`, XML per Muster (läuft so auch in Node-Tests). Größenlimits gegen ZIP-Bomben. Testdateien in `tests/fixtures/` (erzeugt mit `erzeugen.py`, braucht openpyxl und python-docx).
 - `js/app.js`: Oberfläche (Reiter, Formulare, Map, Druck).
 - `css/app.css`: Design-Tokens, Hell/Dunkel, Druckansicht (A3 quer).
 - `index.html`: lokale Fassung (Doppelklick, eigene CSP). `artifact.html`: Fassung für claude.ai ohne Seitenrahmen (doctype/head/body ergänzt claude.ai), startet mit dem Beispiel (`data-start="beispiel"`). Seitengerüst in beiden Dateien gleich halten.
 - GitHub Pages: Branch-Root, `_config.yml` schließt alles außer `index.html`, `css/`, `js/` aus. Relative Pfade beibehalten (Seite läuft unter `/Template-User-Journey-Map/`).
-- Veröffentlichen: Artifact mit `artifact.html` als Seite, `css/app.css` und `js/*.js` als `files`, Fähigkeit `downloads`.
+- Veröffentlichen: Artifact mit `artifact.html` als Seite, `css/app.css` und alle `js/*.js` (auch `import.js`) als `files`, Fähigkeit `downloads`.
 - Daten: nur als JSON-Datei beim Nutzer, Format `schema: "journey-map-vorlage"`, `schemaVersion: 1`. Kein localStorage, keine Netzwerkzugriffe.
 
 ## Konventionen
