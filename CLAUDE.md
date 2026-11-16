@@ -19,6 +19,7 @@ Anforderungen: `docs/rahmendaten.md` (Canvas mit Auslöser, Rollen, Schritten, �
 - `js/app.js`: Oberfläche (Reiter, Formulare, Map, Druck).
 - `css/app.css`: Design-Tokens, Hell/Dunkel, Druckansicht (A3 quer).
 - `index.html`: lokale Fassung (Doppelklick, eigene CSP). `artifact.html`: Fassung für claude.ai ohne Seitenrahmen (doctype/head/body ergänzt claude.ai), startet mit dem Beispiel (`data-start="beispiel"`). Seitengerüst in beiden Dateien gleich halten.
+- GitHub Pages: Branch-Root, `_config.yml` schließt alles außer `index.html`, `css/`, `js/` aus. Relative Pfade beibehalten (Seite läuft unter `/Template-User-Journey-Map/`).
 - Veröffentlichen: Artifact mit `artifact.html` als Seite, `css/app.css` und `js/*.js` als `files`, Fähigkeit `downloads`.
 - Daten: nur als JSON-Datei beim Nutzer, Format `schema: "journey-map-vorlage"`, `schemaVersion: 1`. Kein localStorage, keine Netzwerkzugriffe.
 

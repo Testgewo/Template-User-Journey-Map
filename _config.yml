@@ -1,0 +1,8 @@
+# GitHub Pages: nur die Vorlage selbst ausliefern (index.html, css/, js/).
+# Dateien ohne Front Matter werden unverändert kopiert.
+exclude:
+  - artifact.html
+  - CLAUDE.md
+  - README.md
+  - docs/
+  - tests/

@@ -14,6 +14,19 @@ Es gibt keine Installation, keinen Server und keine fremden Pakete. Die App läd
 
 Zum Ausprobieren oben auf **Beispiel laden** klicken. Es lädt eine frei erfundene Voicebot-Journey.
 
+### Im Netz über GitHub Pages
+
+Die Vorlage läuft auch als normale Webseite unter
+`https://testgewo.github.io/Template-User-Journey-Map/`, sobald GitHub Pages eingeschaltet ist:
+
+1. Im Repository auf GitHub **Settings → Pages** öffnen.
+2. Unter **Build and deployment** bei **Source** „Deploy from a branch“ wählen.
+3. Als **Branch** den Standardbranch und den Ordner `/ (root)` wählen, dann **Save**.
+
+Nach ein bis zwei Minuten ist die Seite erreichbar. Jeder Push auf diesen Branch aktualisiert sie. `_config.yml` sorgt dafür, dass nur `index.html`, `css/` und `js/` ausgeliefert werden.
+
+Die Seite ist öffentlich erreichbar. Sie speichert nichts auf einem Server: Eingaben bleiben im Browser, gespeichert wird nur als Datei auf dem eigenen Rechner. GitHub protokolliert beim Aufruf, wie jeder Webserver, die IP-Adresse der Besucher*innen.
+
 ### Als Seite in claude.ai
 
 `artifact.html` ist dieselbe Vorlage als private Seite (Artifact) in claude.ai. Sie nutzt dieselben Dateien unter `css/` und `js/` und unterscheidet sich in drei Punkten:
