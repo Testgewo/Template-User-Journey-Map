@@ -231,6 +231,30 @@
     return neu;
   }
 
+  /** Überblick für die Map: Anzahl Schritte, Pain Points, Touchpoints sowie Tief- und Höhepunkt der Emotionskurve. */
+  function kennzahlen(map) {
+    const schritte = geordneteSchritte(map);
+    let tief = null;
+    let hoch = null;
+    schritte.forEach((s, i) => {
+      if (s.emotion === null) return;
+      if (s.emotion <= -1 && (!tief || s.emotion < tief.s.emotion)) tief = { s, nr: i + 1 };
+      if (s.emotion >= 1 && (!hoch || s.emotion > hoch.s.emotion)) hoch = { s, nr: i + 1 };
+    });
+    const punkt = (x) => {
+      if (!x) return null;
+      const phase = map.phasen.find((p) => p.id === x.s.phaseId);
+      return { nr: x.nr, schrittId: x.s.id, aktion: x.s.aktion.trim(), phase: phase ? phase.name.trim() : '', emotion: x.s.emotion };
+    };
+    return {
+      schritte: schritte.length,
+      painPoints: schritte.reduce((n, s) => n + s.painPoints.length, 0),
+      touchpoints: new Set(schritte.map((s) => s.touchpoint.trim().toLowerCase()).filter(Boolean)).size,
+      tiefpunkt: punkt(tief),
+      hoehepunkt: punkt(hoch),
+    };
+  }
+
   function quellenKuerzel(map, quelleId) {
     const i = map.quellen.findIndex((q) => q.id === quelleId);
     return i < 0 ? '' : 'Q' + (i + 1);
@@ -541,6 +565,7 @@
     MAX_LISTENSCHRITTE,
     zeilenZuEintraegen,
     schritteAusListe,
+    kennzahlen,
     quellenKuerzel,
     artInfo,
     naechsteNebenversion,

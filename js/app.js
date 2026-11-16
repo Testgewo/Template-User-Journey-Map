@@ -108,7 +108,10 @@
 
   function kuerzen(text, max) {
     const t = String(text || '').trim();
-    return t.length > max ? t.slice(0, max - 1) + '…' : t;
+    if (t.length <= max) return t;
+    const schnitt = t.slice(0, max - 1);
+    const grenze = schnitt.lastIndexOf(' ');
+    return (grenze > max * 0.6 ? schnitt.slice(0, grenze) : schnitt).replace(/[\s,;:–-]+$/, '') + ' …';
   }
 
   function mehrzahl(n, eins, viele) {
@@ -286,6 +289,7 @@
   function zeigeTab(id, fokusId) {
     const wechsel = zustand.tab !== id;
     zustand.tab = id;
+    document.body.setAttribute('data-tab', id);
     if (id === 'pruefung') zustand.alleZeigen = true;
     for (const t of TABS) {
       const aktiv = t.id === id;
@@ -1553,213 +1557,392 @@
 
   /* ================= Reiter 4: Map ================= */
 
+  /* ---------- Symbole für Touchpoints (einfache Linienzeichnungen, 24 × 24) ---------- */
+
+  const SYMBOLE = {
+    voicebot: [
+      ['rect', { x: 4, y: 8, width: 16, height: 12, rx: 3 }],
+      ['path', { d: 'M12 4v4' }],
+      ['circle', { cx: 12, cy: 3, r: 1 }],
+      ['circle', { cx: 9, cy: 14, r: 1.2 }],
+      ['circle', { cx: 15, cy: 14, r: 1.2 }],
+    ],
+    telefon: [
+      [
+        'path',
+        {
+          d: 'M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z',
+        },
+      ],
+    ],
+    web: [
+      ['circle', { cx: 12, cy: 12, r: 9 }],
+      ['ellipse', { cx: 12, cy: 12, rx: 4, ry: 9 }],
+      ['path', { d: 'M3 12h18' }],
+    ],
+    app: [
+      ['rect', { x: 7, y: 2, width: 10, height: 20, rx: 2 }],
+      ['path', { d: 'M11 18h2' }],
+    ],
+    nachricht: [['path', { d: 'M4 5h16v11H9l-5 4z' }]],
+    post: [
+      ['rect', { x: 3, y: 5, width: 18, height: 14, rx: 2 }],
+      ['path', { d: 'M3 7l9 6 9-6' }],
+    ],
+    person: [
+      ['circle', { cx: 12, cy: 8, r: 4 }],
+      ['path', { d: 'M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6' }],
+    ],
+    aushang: [
+      ['rect', { x: 5, y: 3, width: 14, height: 18, rx: 1 }],
+      ['path', { d: 'M8 8h8M8 12h8M8 16h5' }],
+    ],
+    ort: [
+      ['path', { d: 'M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z' }],
+      ['circle', { cx: 12, cy: 10, r: 2.5 }],
+    ],
+    sonstiges: [['circle', { cx: 12, cy: 12, r: 4 }]],
+  };
+
+  const SYMBOL_MUSTER = [
+    ['voicebot', /voicebot|sprachassistent|sprachdialog|\bbot\b|ivr|chatbot/i],
+    ['nachricht', /sms|chat|messenger|whatsapp|nachricht/i],
+    ['telefon', /telefon|hotline|anruf|call/i],
+    ['app', /\bapp\b|smartphone|handy|mobil/i],
+    ['web', /website|webseite|internet|portal|online|homepage|\bweb\b/i],
+    ['post', /e-?mail|\bmail|brief|\bpost\b|schreiben/i],
+    ['aushang', /aushang|hausflur|flyer|plakat|schaukasten|aufsteller/i],
+    ['person', /service-?team|mitarbeit|berater|team|person|hauswart|hausmeist|kundenservice|sachbearbeit/i],
+    ['ort', /vor ort|büro|buero|geschäftsstelle|servicepunkt|wohnung|filiale/i],
+  ];
+
+  function symbol(art, klasse) {
+    const svg = s('svg', { class: klasse || 'jm-symbol', viewBox: '0 0 24 24', 'aria-hidden': 'true', focusable: 'false' });
+    for (const [tag, attrs] of SYMBOLE[art] || SYMBOLE.sonstiges) svg.append(s(tag, attrs));
+    return svg;
+  }
+
+  function touchpointArt(text) {
+    const treffer = SYMBOL_MUSTER.find(([, muster]) => muster.test(text || ''));
+    return treffer ? treffer[0] : 'sonstiges';
+  }
+
+  /* ---------- Emotionskurve ---------- */
+
+  /** Weiche Kurve durch alle Punkte (Catmull-Rom als Bézier-Kurven). */
+  function glatterPfad(p) {
+    const r = (z) => Math.round(z * 10) / 10;
+    let d = 'M' + r(p[0].x) + ' ' + r(p[0].y);
+    for (let i = 0; i < p.length - 1; i++) {
+      const p0 = p[i - 1] || p[i];
+      const p1 = p[i];
+      const p2 = p[i + 1];
+      const p3 = p[i + 2] || p2;
+      d +=
+        ' C' +
+        [p1.x + (p2.x - p0.x) / 6, p1.y + (p2.y - p0.y) / 6, p2.x - (p3.x - p1.x) / 6, p2.y - (p3.y - p1.y) / 6, p2.x, p2.y]
+          .map(r)
+          .join(' ');
+    }
+    return d;
+  }
+
   /**
-   * Ausschnitt der Emotionskurve für eine Spalte. Jede Zelle zeichnet ihren Punkt und die halben
-   * Verbindungen zu den Nachbarn, so ergibt sich über die Zeile eine durchgehende Linie.
-   * Feste Höhe, die Breite folgt der Spalte; der Punkt ist ein eigenes Element, damit er rund bleibt.
+   * Durchgehende Emotionskurve über alle Spalten. Die Linie ist SVG (dehnt sich mit der Breite),
+   * die Gesichter sind eigene Elemente, damit sie rund bleiben.
    */
-  function kurve(aktuell, vorher, nachher) {
-    const y = (v) => 50 - v * 20; // Werte -2…2 → 90…10 (in Prozent der Höhe)
-    const svg = s('svg', { viewBox: '0 0 100 100', preserveAspectRatio: 'none', 'aria-hidden': 'true', focusable: 'false' });
-    svg.append(s('line', { class: 'kurve-null', x1: 0, y1: 50, x2: 100, y2: 50 }));
-    const huelle = h('div', { class: 'kurve', 'aria-hidden': 'true' }, svg);
-    if (aktuell === null) return huelle;
-    const punkte = [];
-    if (vorher !== null) punkte.push('0,' + (y(vorher) + y(aktuell)) / 2);
-    punkte.push('50,' + y(aktuell));
-    if (nachher !== null) punkte.push('100,' + (y(aktuell) + y(nachher)) / 2);
-    if (punkte.length > 1) svg.append(s('polyline', { class: 'kurve-linie', points: punkte.join(' ') }));
-    const punkt = h('span', { class: 'kurve-punkt emo-' + aktuell });
-    punkt.style.top = y(aktuell) + '%';
-    huelle.append(punkt);
+  function emotionsKurve(spalten, nr, kz) {
+    const n = spalten.length;
+    const y = (v) => 50 - v * 20; // -2 … 2 → 90 … 10 (Prozent der Höhe)
+    const flaeche = h('div', { class: 'jm-kurve-flaeche' });
+    const svg = s('svg', {
+      class: 'jm-kurve-svg',
+      viewBox: '0 0 ' + n * 100 + ' 100',
+      preserveAspectRatio: 'none',
+      'aria-hidden': 'true',
+      focusable: 'false',
+    });
+    svg.append(
+      s('rect', { class: 'zone-positiv', x: 0, y: 0, width: n * 100, height: 50 }),
+      s('rect', { class: 'zone-negativ', x: 0, y: 50, width: n * 100, height: 50 }),
+      s('line', { class: 'kurve-null', x1: 0, y1: 50, x2: n * 100, y2: 50 })
+    );
+    const abschnitte = [];
+    let abschnitt = [];
+    spalten.forEach((sp, i) => {
+      if (sp.schritt && sp.schritt.emotion !== null) {
+        abschnitt.push({ x: i * 100 + 50, y: y(sp.schritt.emotion) });
+      } else if (abschnitt.length) {
+        abschnitte.push(abschnitt);
+        abschnitt = [];
+      }
+    });
+    if (abschnitt.length) abschnitte.push(abschnitt);
+    for (const a of abschnitte) if (a.length > 1) svg.append(s('path', { class: 'kurve-linie', d: glatterPfad(a) }));
+    flaeche.append(svg);
+
+    spalten.forEach((sp, i) => {
+      const x = sp.schritt;
+      if (!x || x.emotion === null) return;
+      const emo = M.EMOTIONEN.find((e) => e.wert === x.emotion);
+      const art =
+        kz.tiefpunkt && kz.tiefpunkt.schrittId === x.id ? 'tief' : kz.hoehepunkt && kz.hoehepunkt.schrittId === x.id ? 'hoch' : '';
+      const gesicht = h(
+        'span',
+        { class: 'jm-gesicht emo-' + x.emotion + (art ? ' ' + art : ''), title: 'Schritt ' + nr.get(x.id) + ': ' + emo.label },
+        emo.symbol
+      );
+      const links = ((i + 0.5) / n) * 100 + '%';
+      gesicht.style.left = links;
+      gesicht.style.top = y(x.emotion) + '%';
+      flaeche.append(gesicht);
+      if (art) {
+        const marke = h('span', { class: 'jm-kurven-marke ' + art }, art === 'tief' ? 'Tiefpunkt' : 'Höhepunkt');
+        marke.style.left = links;
+        marke.style.top = y(x.emotion) + '%';
+        flaeche.append(marke);
+      }
+    });
+    const huelle = h('div', { class: 'jm-kurve' }, flaeche);
+    huelle.style.gridColumn = '2 / span ' + n;
     return huelle;
   }
 
+  /* ---------- Journey Map ---------- */
+
   function mapDokument(m, modus) {
     const pr = P.pruefen(m);
+    const kz = M.kennzahlen(m);
     const st = m.version.status;
     const nr = new Map(M.geordneteSchritte(m).map((x, i) => [x.id, i + 1]));
+    const leer = (t) => !String(t || '').trim();
 
     // Spalten: je Phase ihre Schritte, eine Platzhalterspalte für leere Phasen
     const gruppen = m.phasen.map((p, pi) => {
       const ss = m.schritte.filter((x) => x.phaseId === p.id);
-      return { titel: phasenName(p), klasse: pi % 2 ? 'phase-b' : 'phase-a', schritte: ss.length ? ss : [null] };
+      return { titel: phasenName(p), farbe: (pi % 6) + 1, schritte: ss.length ? ss : [null] };
     });
     const phasenIds = new Set(m.phasen.map((p) => p.id));
     const ohnePhase = m.schritte.filter((x) => !phasenIds.has(x.phaseId));
-    if (ohnePhase.length) gruppen.push({ titel: 'Ohne Phase', klasse: 'phase-b', schritte: ohnePhase });
-    const spalten = gruppen.flatMap((g) => g.schritte);
+    if (ohnePhase.length) gruppen.push({ titel: 'Ohne Phase', farbe: 6, schritte: ohnePhase });
+    const spalten = gruppen.flatMap((g) => g.schritte.map((schritt) => ({ schritt, farbe: g.farbe })));
+    const n = spalten.length;
 
+    const quelleMarke = (quelleId) => {
+      const k = M.quellenKuerzel(m, quelleId);
+      return k ? h('span', { class: 'jm-quelle' }, k) : null;
+    };
+    const spur = (titel, hinweis, zellen, klasse) => [
+      h('div', { class: 'jm-spur-titel' + (klasse ? ' ' + klasse : '') }, h('span', {}, titel), hinweis ? h('small', {}, hinweis) : null),
+      zellen,
+    ];
+    const jeSpalte = (klasse, fn, leerInhalt) =>
+      spalten.map((sp) =>
+        h('div', { class: 'jm-zelle ' + klasse + ' farbe-' + sp.farbe }, sp.schritt ? fn(sp.schritt) : leerInhalt || null)
+      );
+
+    /* Kopf */
     const titelTag = modus === 'druck' ? 'h1' : 'h3';
     const stempel =
       st === 'freigegeben'
-        ? h('p', { class: 'map-stempel freigegeben' }, 'FREIGEGEBEN · Version ' + m.version.nummer)
-        : h('p', { class: 'map-stempel' }, M.STATUS[st].label.toUpperCase() + ' · Version ' + m.version.nummer + ' · nicht freigegeben');
-
-    const eckdaten = [
-      ['Anlass und Rahmen', m.rahmen.anlass],
-      ['Nutzergruppe', m.rahmen.nutzergruppe],
-      ['Startpunkt', m.rahmen.startpunkt],
-      ['Endpunkt', m.rahmen.endpunkt],
-      ['Versionsstand', 'Version ' + m.version.nummer + ' · ' + M.STATUS[st].label + ' · Stand ' + datumDe(m.version.stand)],
-      m.version.freigabe ? ['Freigabe', 'durch ' + m.version.freigabe.durch + ' am ' + datumDe(m.version.freigabe.datum)] : null,
-      m.rahmen.erfasstVon.trim() ? ['Erfasst von', m.rahmen.erfasstVon] : null,
-      m.rahmen.fachbereich.trim() ? ['Prüfender Fachbereich', m.rahmen.fachbereich] : null,
-    ].filter(Boolean);
-
-    const textOderLeer = (t) => (String(t || '').trim() ? t : '—');
-    const zeile = (label, zellen) => h('tr', {}, h('th', { scope: 'row' }, label), zellen);
-    const zellen = (fn, leerText) =>
-      spalten.map((x, i) => (x ? h('td', {}, fn(x, i)) : h('td', { class: 'leer' }, leerText || '')));
-
-    const hatGedanken = m.schritte.some((x) => x.gedanken.trim());
-    const hatZitate = m.schritte.some((x) => x.zitat.trim());
-    const hatIntern = m.schritte.some((x) => x.intern.trim());
-
-    const emotionZellen = spalten.map((x, i) => {
-      const wert = (sp) => (sp && sp.emotion !== null ? sp.emotion : null);
-      if (!x) return h('td', { class: 'emotion' }, kurve(null, null, null));
-      const emo = M.EMOTIONEN.find((e) => e.wert === x.emotion);
-      return h(
-        'td',
-        { class: 'emotion' },
-        kurve(wert(x), wert(spalten[i - 1]), wert(spalten[i + 1])),
-        h(
-          'span',
-          { class: 'emotion-label' },
-          emo ? [h('span', { 'aria-hidden': 'true' }, emo.symbol + ' '), emo.label] : 'nicht erfasst'
-        )
-      );
-    });
-
-    const tabelle = h(
-      'table',
-      { class: spalten.length <= 8 ? 'jm jm-schmal' : 'jm' },
-      h('caption', { class: 'visuell-versteckt' }, 'Journey Map: Schritte nach Phasen mit Aktion, Touchpoint, Emotion und Pain Points'),
-      h('colgroup', {}, h('col', { class: 'spalte-label' })),
-      gruppen.map((g) => h('colgroup', {}, g.schritte.map(() => h('col', { class: 'spalte-schritt' })))),
+        ? h('p', { class: 'jm-stempel freigegeben' }, 'Freigegeben · Version ' + m.version.nummer)
+        : h('p', { class: 'jm-stempel' }, M.STATUS[st].label + ' · Version ' + m.version.nummer + ' · nicht freigegeben');
+    const kachel = (wert, label) => h('div', { class: 'jm-kachel' }, h('dd', {}, String(wert)), h('dt', {}, label));
+    const kopf = h(
+      'header',
+      { class: 'jm-kopf' },
       h(
-        'thead',
-        {},
+        'div',
+        { class: 'jm-kopf-haupt' },
+        stempel,
+        h(titelTag, { class: 'jm-titel' }, m.rahmen.titel.trim() || 'Ohne Titel'),
+        leer(m.rahmen.anlass) ? null : h('p', { class: 'jm-anlass' }, m.rahmen.anlass),
         h(
-          'tr',
-          {},
-          h('th', { scope: 'row' }, 'Phase'),
-          gruppen.map((g) => h('th', { scope: 'colgroup', colspan: String(g.schritte.length), class: 'phase ' + g.klasse }, g.titel))
-        ),
-        h(
-          'tr',
-          {},
-          h('th', { scope: 'row' }, 'Schritt'),
-          spalten.map((x) => h('th', { scope: 'col', class: 'schritt-nr' }, x ? String(nr.get(x.id)) : '–'))
+          'div',
+          { class: 'jm-reise' },
+          h('div', { class: 'jm-reise-punkt' }, h('span', { class: 'jm-augenbraue' }, 'Start'), h('span', {}, m.rahmen.startpunkt.trim() || '—')),
+          h('span', { class: 'jm-reise-pfeil', 'aria-hidden': 'true' }),
+          h('div', { class: 'jm-reise-punkt' }, h('span', { class: 'jm-augenbraue' }, 'Ziel'), h('span', {}, m.rahmen.endpunkt.trim() || '—'))
         )
       ),
       h(
-        'tbody',
-        {},
-        zeile(
-          'Aktion',
-          zellen(
-            (x) => [
-              textOderLeer(x.aktion),
-              x.quelleId && M.quellenKuerzel(m, x.quelleId)
-                ? [' ', h('span', { class: 'quelle-ref' }, '[' + M.quellenKuerzel(m, x.quelleId) + ']')]
-                : null,
-            ],
-            'Noch keine Schritte'
-          )
+        'div',
+        { class: 'jm-kopf-seite' },
+        h(
+          'div',
+          { class: 'jm-persona' },
+          symbol('person', 'jm-persona-symbol'),
+          h('div', {}, h('span', { class: 'jm-augenbraue' }, 'Nutzergruppe'), h('p', {}, m.rahmen.nutzergruppe.trim() || '—'))
         ),
-        zeile('Touchpoint', zellen((x) => textOderLeer(x.touchpoint))),
-        hatGedanken ? zeile('Gedanken', zellen((x) => textOderLeer(x.gedanken))) : null,
-        zeile('Emotion', emotionZellen),
-        zeile(
-          'Pain Points',
-          zellen((x) =>
-            x.painPoints.length
-              ? h(
-                  'ul',
-                  { class: 'pp-liste' },
-                  x.painPoints.map((pp) =>
-                    h(
-                      'li',
-                      {},
-                      textOderLeer(pp.text),
-                      ' ',
-                      h('span', { class: 'quelle-ref' }, '[' + (M.quellenKuerzel(m, pp.quelleId) || 'ohne Beleg') + ']')
-                    )
-                  )
-                )
-              : '—'
-          )
+        h(
+          'dl',
+          { class: 'jm-ueberblick' },
+          kachel(kz.schritte, 'Schritte'),
+          kachel(kz.touchpoints, 'Touchpoints'),
+          kachel(kz.painPoints, 'Pain Points')
         ),
-        hatZitate ? zeile('Zitate', zellen((x) => (x.zitat.trim() ? h('span', { class: 'zitat' }, x.zitat) : '—'))) : null,
-        hatIntern
+        kz.tiefpunkt
           ? h(
-              'tr',
-              { class: 'trenner' },
-              h('th', { scope: 'row' }, 'Interner Ablauf', h('span', { class: 'zeilen-hinweis' }, 'für Kund*innen nicht sichtbar')),
-              zellen((x) => textOderLeer(x.intern))
+              'p',
+              { class: 'jm-tiefpunkt' },
+              h('strong', {}, 'Tiefpunkt: '),
+              'Schritt ' + kz.tiefpunkt.nr + (kz.tiefpunkt.aktion ? ': ' + kuerzen(kz.tiefpunkt.aktion, 90) : '') + (kz.tiefpunkt.phase ? ' (' + kz.tiefpunkt.phase + ')' : '')
             )
           : null
       )
     );
 
-    const quellen = m.quellen.length
-      ? h(
-          'section',
-          { class: 'map-quellen' },
-          h(modus === 'druck' ? 'h2' : 'h4', {}, 'Quellen'),
-          h(
-            'ol',
-            {},
-            m.quellen.map((q, i) => {
-              const art = M.artInfo(q.art);
-              return h(
-                'li',
-                {},
-                h('strong', {}, 'Q' + (i + 1) + ' '),
-                textOderLeer(q.bezeichnung),
-                art ? ' · ' + art.label : '',
-                q.stand.trim() ? ' · Stand ' + q.stand : ''
-              );
-            })
-          )
-        )
-      : null;
+    /* Raster mit Spuren */
+    const raster = h('div', { class: 'jm-raster', 'aria-hidden': 'true' });
+    raster.style.setProperty('--spalten', String(n));
 
-    const offen = pr.zaehler.fehlt + pr.zaehler.rueckfrage;
-    return h(
+    const phasen = gruppen.map((g, gi) => {
+      const pp = g.schritte.reduce((summe, x) => summe + (x ? x.painPoints.length : 0), 0);
+      const el = h(
+        'div',
+        { class: 'jm-phase farbe-' + g.farbe + (gi === 0 ? ' erste' : '') + (gi === gruppen.length - 1 ? ' letzte' : '') },
+        h('span', { class: 'jm-phase-name' }, g.titel),
+        pp ? h('span', { class: 'jm-phase-pp' }, mehrzahl(pp, 'Pain Point', 'Pain Points')) : null
+      );
+      el.style.gridColumn = 'span ' + g.schritte.length;
+      return el;
+    });
+
+    const hatGedanken = m.schritte.some((x) => !leer(x.gedanken));
+    const hatZitate = m.schritte.some((x) => !leer(x.zitat));
+    const hatIntern = m.schritte.some((x) => !leer(x.intern));
+
+    const linie = hatIntern
+      ? h('div', { class: 'jm-sichtlinie' }, h('span', {}, 'Sichtbarkeitslinie · darunter: was intern passiert, für Kund*innen nicht sichtbar'))
+      : null;
+    if (linie) linie.style.gridColumn = '1 / -1';
+
+    fuellen(
+      raster,
+      spur('Phase', null, phasen, 'oben'),
+      spur(
+        'Was die Person tut',
+        null,
+        jeSpalte(
+          'jm-zelle-aktion',
+          (x) =>
+            h(
+              'div',
+              { class: 'jm-karte' },
+              h('span', { class: 'jm-nr' }, String(nr.get(x.id))),
+              h('p', {}, x.aktion.trim() || '—'),
+              quelleMarke(x.quelleId)
+            ),
+          h('div', { class: 'jm-karte jm-leer' }, 'Noch keine Schritte')
+        )
+      ),
+      spur(
+        'Touchpoint',
+        null,
+        jeSpalte('jm-zelle-tp', (x) =>
+          leer(x.touchpoint) ? null : h('div', { class: 'jm-tp' }, symbol(touchpointArt(x.touchpoint)), h('span', {}, x.touchpoint))
+        )
+      ),
+      hatGedanken
+        ? spur('Was sie denkt', null, jeSpalte('jm-zelle-gedanke', (x) => (leer(x.gedanken) ? null : h('p', { class: 'jm-gedanke' }, x.gedanken))))
+        : null,
+      spur('Wie sie sich fühlt', 'oben positiv, unten negativ', [emotionsKurve(spalten, nr, kz)]),
+      spur(
+        'Pain Points',
+        null,
+        jeSpalte('jm-zelle-pp', (x) =>
+          x.painPoints.map((pp) => h('div', { class: 'jm-pp' }, h('p', {}, pp.text.trim() || '—'), quelleMarke(pp.quelleId)))
+        )
+      ),
+      hatZitate
+        ? spur('Zitate', null, jeSpalte('jm-zelle-zitat', (x) => (leer(x.zitat) ? null : h('blockquote', { class: 'jm-zitat' }, x.zitat))))
+        : null,
+      linie,
+      hatIntern
+        ? spur('Interner Ablauf', null, jeSpalte('jm-zelle-intern', (x) => (leer(x.intern) ? null : h('div', { class: 'jm-intern' }, x.intern))), 'intern')
+        : null
+    );
+
+    /* Textfassung für Screenreader (die Grafik ist für sie ausgeblendet) */
+    const textfassung = h(
       'div',
-      { class: 'map-dokument' },
-      stempel,
-      h(titelTag, { class: 'map-titel' }, m.rahmen.titel.trim() || 'Ohne Titel'),
+      { class: 'visuell-versteckt' },
+      h('p', {}, 'Textfassung der Journey Map'),
       h(
-        'dl',
-        { class: 'map-eckdaten' },
-        eckdaten.map(([k, v]) => h('div', {}, h('dt', {}, k), h('dd', {}, textOderLeer(v))))
-      ),
-      tabelle,
-      h(
-        'p',
-        { class: 'map-legende' },
-        'Emotion: ' + M.EMOTIONEN.map((e) => e.symbol + ' ' + e.label).join(' · ') + '. Pain Points mit Quellenangabe [Q…].'
-      ),
-      quellen,
-      h(
-        'p',
-        { class: 'map-fuss' },
-        'Journey-Map-Vorlage · ' +
-          (m.rahmen.titel.trim() || 'Ohne Titel') +
-          ' · Version ' +
-          m.version.nummer +
-          ' · ' +
-          M.STATUS[st].label +
-          ' · Stand ' +
-          datumDe(m.version.stand) +
-          (modus === 'druck' ? ' · gedruckt am ' + datumDe(M.heute()) : '') +
-          (offen ? ' · ' + mehrzahl(offen, 'offener Prüfpunkt', 'offene Prüfpunkte') : '')
+        'ol',
+        {},
+        M.geordneteSchritte(m).map((x) => {
+          const phase = m.phasen.find((p) => p.id === x.phaseId);
+          const emo = M.EMOTIONEN.find((e) => e.wert === x.emotion);
+          return h(
+            'li',
+            {},
+            [
+              'Phase: ' + (phase ? phasenName(phase) : 'ohne Phase'),
+              'Aktion: ' + (x.aktion.trim() || 'fehlt'),
+              'Touchpoint: ' + (x.touchpoint.trim() || 'fehlt'),
+              'Emotion: ' + (emo ? emo.label : 'nicht erfasst'),
+              leer(x.gedanken) ? null : 'Gedanken: ' + x.gedanken,
+              x.painPoints.length ? 'Pain Points: ' + x.painPoints.map((pp) => pp.text).join('; ') : null,
+              leer(x.zitat) ? null : 'Zitat: ' + x.zitat,
+              leer(x.intern) ? null : 'Interner Ablauf: ' + x.intern,
+            ]
+              .filter(Boolean)
+              .join('. ') + '.'
+          );
+        })
       )
     );
+
+    /* Fuß: Legende, Quellen, Versionsstand */
+    const offen = pr.zaehler.fehlt + pr.zaehler.rueckfrage;
+    const angaben = [
+      'Version ' + m.version.nummer + ' · ' + M.STATUS[st].label + ' · Stand ' + datumDe(m.version.stand),
+      m.version.freigabe ? 'Freigegeben durch ' + m.version.freigabe.durch + ' am ' + datumDe(m.version.freigabe.datum) : null,
+      leer(m.rahmen.erfasstVon) ? null : 'Erfasst von ' + m.rahmen.erfasstVon.trim(),
+      leer(m.rahmen.fachbereich) ? null : 'Geprüft durch ' + m.rahmen.fachbereich.trim(),
+      modus === 'druck' ? 'gedruckt am ' + datumDe(M.heute()) : null,
+      offen ? mehrzahl(offen, 'offener Prüfpunkt', 'offene Prüfpunkte') : null,
+    ].filter(Boolean);
+    const fuss = h(
+      'footer',
+      { class: 'jm-fuss' },
+      h(
+        'div',
+        { class: 'jm-legende' },
+        h('span', { class: 'jm-augenbraue' }, 'Emotion'),
+        M.EMOTIONEN.map((e) => h('span', { class: 'jm-legende-eintrag' }, h('span', { 'aria-hidden': 'true' }, e.symbol), ' ' + e.label))
+      ),
+      m.quellen.length
+        ? h(
+            'div',
+            { class: 'jm-quellen' },
+            h('span', { class: 'jm-augenbraue' }, 'Quellen'),
+            h(
+              'ol',
+              {},
+              m.quellen.map((q, i) => {
+                const art = M.artInfo(q.art);
+                return h(
+                  'li',
+                  {},
+                  h('span', { class: 'jm-quelle' }, 'Q' + (i + 1)),
+                  ' ' + (q.bezeichnung.trim() || '—') + (art ? ' · ' + art.label : '') + (q.stand.trim() ? ' · ' + q.stand : '')
+                );
+              })
+            )
+          )
+        : null,
+      h('p', { class: 'jm-angaben' }, 'Journey-Map-Vorlage · ' + angaben.join(' · '))
+    );
+
+    const buehne = h('div', { class: 'jm-buehne' }, raster);
+    if (modus !== 'druck') {
+      buehne.setAttribute('role', 'region');
+      buehne.setAttribute('tabindex', '0');
+      buehne.setAttribute('aria-label', 'Grafische Journey Map, horizontal scrollbar. Die Textfassung steht davor.');
+    }
+    return h('div', { class: 'jm-doc' }, kopf, textfassung, buehne, fuss);
   }
 
   function renderMap(panel) {
@@ -1788,7 +1971,7 @@
               h('button', { type: 'button', class: 'link', onclick: () => zeigeTab('pruefung') }, 'Offene Prüfpunkte ansehen')
             )
           ),
-      h('div', { class: 'map-rahmen', role: 'region', 'aria-label': 'Journey Map (horizontal scrollbar)', tabindex: '0' }, mapDokument(zustand.map, 'ansicht'))
+      h('div', { class: 'map-rahmen' }, mapDokument(zustand.map, 'ansicht'))
     );
   }
 

@@ -40,6 +40,20 @@
 
   --phase-a: #e3edf9;
   --phase-b: #eef2f7;
+  --phase-1: #dfeaf8;
+  --phase-1-stark: #2d64a8;
+  --phase-2: #d9efe8;
+  --phase-2-stark: #1c7a63;
+  --phase-3: #f6ead3;
+  --phase-3-stark: #94650c;
+  --phase-4: #e8e2f6;
+  --phase-4-stark: #6248a8;
+  --phase-5: #f6e0e5;
+  --phase-5-stark: #a33b55;
+  --phase-6: #e6ecd8;
+  --phase-6-stark: #5b6f22;
+  --zone-positiv: #edf7ef;
+  --zone-negativ: #fcefed;
 }
 
 /*
@@ -78,6 +92,20 @@
 
     --phase-a: #1d2b3d;
     --phase-b: #262b33;
+    --phase-1: #1d2d42;
+    --phase-1-stark: #8ab8ff;
+    --phase-2: #17342e;
+    --phase-2-stark: #6fd1b8;
+    --phase-3: #372d17;
+    --phase-3-stark: #f0c060;
+    --phase-4: #2a2440;
+    --phase-4-stark: #b9a6f2;
+    --phase-5: #3a2027;
+    --phase-5-stark: #f29bb0;
+    --phase-6: #283018;
+    --phase-6-stark: #b9cf7a;
+    --zone-positiv: #142419;
+    --zone-negativ: #2a1716;
   }
 }
 
@@ -112,6 +140,20 @@
 
   --phase-a: #1d2b3d;
   --phase-b: #262b33;
+  --phase-1: #1d2d42;
+  --phase-1-stark: #8ab8ff;
+  --phase-2: #17342e;
+  --phase-2-stark: #6fd1b8;
+  --phase-3: #372d17;
+  --phase-3-stark: #f0c060;
+  --phase-4: #2a2440;
+  --phase-4-stark: #b9a6f2;
+  --phase-5: #3a2027;
+  --phase-5-stark: #f29bb0;
+  --phase-6: #283018;
+  --phase-6-stark: #b9cf7a;
+  --zone-positiv: #142419;
+  --zone-negativ: #2a1716;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -954,216 +996,535 @@ h4.abschnitt {
   color: var(--farbe-text-leise);
 }
 
+/* Im Reiter „Map“ darf die Map breiter werden als die Formulare */
+body[data-tab='map'] main {
+  max-width: 120rem;
+}
+
 .map-rahmen {
-  overflow-x: auto;
   background: var(--farbe-flaeche);
   border: 1px solid var(--farbe-rand);
   border-radius: var(--radius);
-  padding: var(--abstand);
+  padding: clamp(0.75rem, 2vw, 1.5rem);
 }
 
-.map-dokument {
-  min-width: min-content;
+.jm-doc {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  min-width: 0;
 }
-.map-titel {
-  font-size: 1.4rem;
-  margin-bottom: 0.25rem;
+
+.jm-augenbraue {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--farbe-text-leise);
 }
-.map-stempel {
+
+/* Kopf: Szenario links, Nutzergruppe und Überblick rechts */
+.jm-kopf {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(16rem, 1fr);
+  gap: 1rem 2rem;
+  align-items: start;
+}
+@media (max-width: 52rem) {
+  .jm-kopf {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.jm-stempel {
   display: inline-block;
+  margin: 0 0 0.5rem;
+  padding: 0.15rem 0.6rem;
+  border: 1.5px solid var(--rueckfrage-text);
+  border-radius: 999px;
+  color: var(--rueckfrage-text);
+  font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.04em;
-  padding: 0.2rem 0.6rem;
-  border: 2px solid var(--rueckfrage-text);
-  color: var(--rueckfrage-text);
-  border-radius: 4px;
-  margin-bottom: 0.5rem;
+  text-transform: uppercase;
 }
-.map-stempel.freigegeben {
+.jm-stempel.freigegeben {
   border-color: var(--ok-text);
   color: var(--ok-text);
 }
-.map-eckdaten {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-  gap: 0.25rem 1.5rem;
-  margin: 0 0 1rem;
-  max-width: 70rem;
+.jm-titel {
+  font-size: clamp(1.3rem, 2.4vw, 1.75rem);
+  line-height: 1.2;
+  margin: 0 0 0.4rem;
+  text-wrap: balance;
 }
-.map-eckdaten div {
-  display: flex;
-  flex-direction: column;
-}
-.map-eckdaten dt {
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+.jm-anlass {
+  max-width: 62ch;
   color: var(--farbe-text-leise);
+  margin: 0 0 0.9rem;
 }
-.map-eckdaten dd {
-  margin: 0;
-  white-space: pre-line;
+.jm-reise {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+  max-width: 48rem;
+}
+.jm-reise-punkt {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--farbe-rand);
+  border-radius: var(--radius);
+  background: var(--farbe-flaeche-2);
+}
+.jm-reise-pfeil {
+  flex: 0 0 2.5rem;
+  align-self: center;
+  height: 2px;
+  background: var(--farbe-rand-stark);
+  position: relative;
+}
+.jm-reise-pfeil::after {
+  content: '';
+  position: absolute;
+  right: -1px;
+  top: -5px;
+  border: 6px solid transparent;
+  border-left: 8px solid var(--farbe-rand-stark);
+  border-right: 0;
 }
 
-table.jm {
-  border-collapse: collapse;
-  table-layout: fixed;
-  width: max-content;
+.jm-kopf-seite {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
-.jm col.spalte-label {
-  width: 8.5rem;
+.jm-persona {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.75rem;
+  border-radius: var(--radius);
+  background: var(--phase-1);
 }
-.jm col.spalte-schritt {
-  width: 12rem;
+.jm-persona p {
+  margin: 0.1rem 0 0;
+  font-weight: 600;
 }
-.jm th,
-.jm td {
+.jm-persona-symbol {
+  flex: none;
+  width: 2.4rem;
+  height: 2.4rem;
+  padding: 0.4rem;
+  border-radius: 50%;
+  background: var(--farbe-flaeche);
+  color: var(--phase-1-stark);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.jm-ueberblick {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: 0;
+}
+.jm-kachel {
+  display: flex;
+  flex-direction: column-reverse;
+  padding: 0.4rem 0.6rem;
   border: 1px solid var(--farbe-rand);
-  padding: 0.5rem 0.6rem;
-  vertical-align: top;
-  text-align: left;
+  border-radius: var(--radius);
+}
+.jm-kachel dd {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.jm-kachel dt {
+  font-size: 0.78rem;
+  color: var(--farbe-text-leise);
+}
+.jm-tiefpunkt {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius);
+  background: var(--zone-negativ);
+  border-left: 4px solid var(--emo-m2);
+  font-size: 0.9rem;
+}
+
+/* Bühne: das Raster scrollt waagerecht, Kopf und Fuß bleiben stehen */
+.jm-buehne {
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+.jm-raster {
+  --label: 8.5rem;
+  display: grid;
+  grid-template-columns: var(--label) repeat(var(--spalten, 1), minmax(9.5rem, 1fr));
+  column-gap: 0.6rem;
+  row-gap: 0.6rem;
+  min-width: min-content;
+}
+.jm-spur-titel {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0.4rem 0.6rem 0.4rem 0;
+  background: var(--farbe-flaeche);
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--farbe-text-leise);
+}
+.jm-spur-titel small {
+  font-size: 0.72rem;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.jm-zelle {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+/* Phasenband als Pfeile */
+.jm-phase {
+  --kerbe: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 3rem;
+  margin-right: -0.6rem;
+  padding: 0.45rem calc(var(--kerbe) + 0.6rem) 0.45rem calc(var(--kerbe) + 0.8rem);
+  background: var(--phase-farbe);
+  clip-path: polygon(0 0, calc(100% - var(--kerbe)) 0, 100% 50%, calc(100% - var(--kerbe)) 100%, 0 100%, var(--kerbe) 50%);
+}
+.jm-phase.erste {
+  padding-left: 0.8rem;
+  border-radius: var(--radius) 0 0 var(--radius);
+  clip-path: polygon(0 0, calc(100% - var(--kerbe)) 0, 100% 50%, calc(100% - var(--kerbe)) 100%, 0 100%);
+}
+.jm-phase.letzte {
+  margin-right: 0;
+}
+.jm-phase-name {
+  font-weight: 700;
+  line-height: 1.25;
+}
+.jm-phase-pp {
+  font-size: 0.78rem;
+  color: var(--fehlt-text);
+}
+
+/* Phasenfarben */
+.farbe-1 {
+  --phase-farbe: var(--phase-1);
+  --phase-akzent: var(--phase-1-stark);
+}
+.farbe-2 {
+  --phase-farbe: var(--phase-2);
+  --phase-akzent: var(--phase-2-stark);
+}
+.farbe-3 {
+  --phase-farbe: var(--phase-3);
+  --phase-akzent: var(--phase-3-stark);
+}
+.farbe-4 {
+  --phase-farbe: var(--phase-4);
+  --phase-akzent: var(--phase-4-stark);
+}
+.farbe-5 {
+  --phase-farbe: var(--phase-5);
+  --phase-akzent: var(--phase-5-stark);
+}
+.farbe-6 {
+  --phase-farbe: var(--phase-6);
+  --phase-akzent: var(--phase-6-stark);
+}
+
+/* Schrittkarten */
+.jm-karte {
+  position: relative;
+  flex: 1;
+  padding: 0.55rem 0.65rem 0.6rem;
+  border: 1px solid var(--farbe-rand);
+  border-top: 4px solid var(--phase-akzent);
+  border-radius: var(--radius);
+  background: var(--farbe-flaeche);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
+}
+.jm-karte p {
+  margin: 0.25rem 0 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.35;
   overflow-wrap: anywhere;
   hyphens: auto;
-  white-space: pre-line;
-  font-size: 0.92rem;
 }
-.jm th[scope='row'] {
-  background: var(--farbe-flaeche-2);
-  font-weight: 600;
+.jm-nr {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--phase-akzent);
+  color: var(--farbe-flaeche);
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
-.jm thead th.phase {
-  font-size: 1rem;
-  text-align: center;
-}
-.jm thead th.phase-a {
-  background: var(--phase-a);
-}
-.jm thead th.phase-b {
-  background: var(--phase-b);
-}
-.jm thead th.schritt-nr {
-  font-weight: 600;
-  color: var(--farbe-text-leise);
-  font-size: 0.85rem;
-  background: var(--farbe-flaeche);
-}
-.jm td.leer {
+.jm-karte.jm-leer {
+  border-style: dashed;
+  border-top-width: 1px;
   color: var(--farbe-text-leise);
   font-style: italic;
+  box-shadow: none;
 }
-.jm td.emotion {
-  padding: 0;
-  vertical-align: middle;
+.jm-quelle {
+  display: inline-block;
+  padding: 0 0.35rem;
+  border-radius: 4px;
+  background: var(--farbe-flaeche-2);
+  border: 1px solid var(--farbe-rand);
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--farbe-text-leise);
+  font-variant-numeric: tabular-nums;
 }
-.jm .kurve {
+.jm-karte .jm-quelle {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+}
+
+/* Touchpoints */
+.jm-tp {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  line-height: 1.3;
+  color: var(--farbe-text);
+}
+.jm-symbol {
+  flex: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  color: var(--phase-akzent);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Gedanken als Sprechblasen */
+.jm-gedanke {
   position: relative;
-  height: 4.5rem;
+  margin: 0.35rem 0 0;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--farbe-rand);
+  border-radius: 1rem;
+  background: var(--farbe-flaeche-2);
+  font-size: 0.86rem;
+  font-style: italic;
+  line-height: 1.35;
 }
-.jm .kurve svg {
+.jm-gedanke::before {
+  content: '';
+  position: absolute;
+  top: -0.4rem;
+  left: 1rem;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-left: 1px solid var(--farbe-rand);
+  border-top: 1px solid var(--farbe-rand);
+  background: var(--farbe-flaeche-2);
+  transform: rotate(45deg);
+}
+
+/* Emotionskurve */
+.jm-kurve {
+  padding-block: 1.6rem;
+}
+.jm-kurve-flaeche {
+  position: relative;
+  height: 7.5rem;
+}
+.jm-kurve-svg {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   overflow: visible;
 }
-.jm .emotion-label {
-  display: block;
-  text-align: center;
-  font-size: 0.85rem;
-  padding: 0 0.25rem 0.4rem;
+.zone-positiv {
+  fill: var(--zone-positiv);
 }
-.jm .pp-liste {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.jm .pp-liste li {
-  padding: 0.3rem 0.4rem;
-  margin-bottom: 0.35rem;
-  border-radius: 4px;
-  background: var(--fehlt-flaeche);
-  color: var(--farbe-text);
-  border-left: 3px solid var(--emo-m2);
-}
-.jm .quelle-ref {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--farbe-text-leise);
-  white-space: nowrap;
-}
-.jm .zitat {
-  font-style: italic;
-}
-/* Trennlinie zwischen Kundensicht und internem Ablauf („Line of Visibility“) */
-.jm tr.trenner > th,
-.jm tr.trenner > td {
-  border-top: 3px double var(--farbe-rand-stark);
-  background: var(--farbe-flaeche-2);
-}
-.jm .zeilen-hinweis {
-  display: block;
-  font-weight: 400;
-  font-size: 0.8rem;
-  color: var(--farbe-text-leise);
-}
-.kurve-linie {
-  stroke: var(--farbe-text-leise);
-  stroke-width: 2.5;
-  fill: none;
-  vector-effect: non-scaling-stroke;
+.zone-negativ {
+  fill: var(--zone-negativ);
 }
 .kurve-null {
-  stroke: var(--farbe-rand);
+  stroke: var(--farbe-rand-stark);
   stroke-width: 1;
-  stroke-dasharray: 4 4;
+  stroke-dasharray: 5 5;
   vector-effect: non-scaling-stroke;
 }
-.kurve-punkt {
+.kurve-linie {
+  fill: none;
+  stroke: var(--farbe-text);
+  stroke-width: 3;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.jm-gesicht {
   position: absolute;
-  left: 50%;
-  width: 16px;
-  height: 16px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border: 2.5px solid var(--emo-0);
   border-radius: 50%;
-  border: 2px solid var(--farbe-flaeche);
+  background: var(--farbe-flaeche);
+  font-size: 1.15rem;
+  line-height: 1;
   transform: translate(-50%, -50%);
-  background: var(--emo-0);
 }
-.kurve-punkt.emo--2 {
+.jm-gesicht.emo--2 {
+  border-color: var(--emo-m2);
+}
+.jm-gesicht.emo--1 {
+  border-color: var(--emo-m1);
+}
+.jm-gesicht.emo-1 {
+  border-color: var(--emo-p1);
+}
+.jm-gesicht.emo-2 {
+  border-color: var(--emo-p2);
+}
+.jm-gesicht.tief,
+.jm-gesicht.hoch {
+  width: 2.6rem;
+  height: 2.6rem;
+  font-size: 1.4rem;
+  border-width: 3px;
+}
+.jm-kurven-marke {
+  position: absolute;
+  z-index: 1;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--farbe-flaeche);
+}
+.jm-kurven-marke.tief {
   background: var(--emo-m2);
+  transform: translate(-50%, 1.5rem);
 }
-.kurve-punkt.emo--1 {
-  background: var(--emo-m1);
-}
-.kurve-punkt.emo-0 {
-  background: var(--emo-0);
-}
-.kurve-punkt.emo-1 {
-  background: var(--emo-p1);
-}
-.kurve-punkt.emo-2 {
+.jm-kurven-marke.hoch {
   background: var(--emo-p2);
+  transform: translate(-50%, -2.7rem);
 }
 
-.map-quellen {
-  margin-top: 1rem;
-  font-size: 0.9rem;
+/* Pain Points */
+.jm-pp {
+  position: relative;
+  padding: 0.4rem 0.55rem 0.45rem 0.65rem;
+  border-left: 3px solid var(--emo-m2);
+  border-radius: 0 6px 6px 0;
+  background: var(--fehlt-flaeche);
+  font-size: 0.84rem;
+  line-height: 1.35;
 }
-.map-quellen ol {
-  margin: 0.25rem 0 0;
-  padding-left: 0;
+.jm-pp p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+.jm-pp .jm-quelle {
+  margin-top: 0.25rem;
+}
+
+/* Zitate */
+.jm-zitat {
+  margin: 0;
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--phase-akzent);
+  font-size: 0.86rem;
+  font-style: italic;
+  color: var(--farbe-text-leise);
+}
+
+/* Sichtbarkeitslinie und interner Ablauf */
+.jm-sichtlinie {
+  position: relative;
+  margin-block: 0.4rem;
+  border-top: 2px dashed var(--farbe-rand-stark);
+}
+.jm-sichtlinie span {
+  position: sticky;
+  left: 0;
+  display: inline-block;
+  transform: translateY(-50%);
+  padding: 0 0.5rem 0 0;
+  background: var(--farbe-flaeche);
+  font-size: 0.74rem;
+  color: var(--farbe-text-leise);
+}
+.jm-intern {
+  padding: 0.45rem 0.6rem;
+  border: 1px dashed var(--farbe-rand-stark);
+  border-radius: 6px;
+  background: var(--farbe-flaeche-2);
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+/* Fuß */
+.jm-fuss {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 2.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--farbe-rand);
+  font-size: 0.82rem;
+  color: var(--farbe-text-leise);
+}
+.jm-legende {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.9rem;
+  align-items: baseline;
+}
+.jm-quellen ol {
+  margin: 0.2rem 0 0;
+  padding: 0;
   list-style: none;
 }
-.map-legende {
-  font-size: 0.85rem;
-  color: var(--farbe-text-leise);
-  margin-top: 0.5rem;
+.jm-quellen li {
+  margin-bottom: 0.15rem;
 }
-.map-fuss {
-  font-size: 0.8rem;
-  color: var(--farbe-text-leise);
-  margin-top: 1rem;
-  border-top: 1px solid var(--farbe-rand);
-  padding-top: 0.5rem;
+.jm-angaben {
+  flex-basis: 100%;
+  margin: 0;
 }
 
 /* ---------- Meldungen und Fuß ---------- */
@@ -1286,6 +1647,23 @@ button.gefahr-primaer {
     --emo-p2: #1d6f37;
     --phase-a: #e3edf9;
     --phase-b: #eef2f7;
+    --phase-1: #dfeaf8;
+    --phase-1-stark: #2d64a8;
+    --phase-2: #d9efe8;
+    --phase-2-stark: #1c7a63;
+    --phase-3: #f6ead3;
+    --phase-3-stark: #94650c;
+    --phase-4: #e8e2f6;
+    --phase-4-stark: #6248a8;
+    --phase-5: #f6e0e5;
+    --phase-5-stark: #a33b55;
+    --phase-6: #e6ecd8;
+    --phase-6-stark: #5b6f22;
+    --zone-positiv: #edf7ef;
+    --zone-negativ: #fcefed;
+    --farbe-rand-stark: #8a94a3;
+    --hinweis-text: #1a4a85;
+    --fehlt-text: #9f1c12;
   }
 
   body {
@@ -1299,59 +1677,61 @@ button.gefahr-primaer {
   #druck {
     display: block !important;
   }
-  /* Viele Schritte: Seite voll ausnutzen. Wenige Schritte: Spalten nicht übermäßig breit. */
-  table.jm {
-    width: 100%;
+  /* Map füllt die Seitenbreite; Spalten teilen sich den Platz */
+  .jm-raster {
+    --label: 24mm;
+    grid-template-columns: var(--label) repeat(var(--spalten, 1), minmax(0, 1fr));
+    min-width: 0;
+    column-gap: 2mm;
+    row-gap: 2mm;
   }
-  .jm col.spalte-schritt {
-    width: auto;
+  .jm-buehne {
+    overflow: visible;
   }
-  table.jm.jm-schmal {
-    width: auto;
+  .jm-doc {
+    gap: 4mm;
+    font-size: 8.5pt;
   }
-  .jm.jm-schmal col.spalte-schritt {
-    width: 45mm;
+  .jm-titel {
+    font-size: 17pt;
   }
-  .jm .kurve {
-    height: 16mm;
-  }
-  .jm col.spalte-label {
-    width: 28mm;
-  }
-  .jm th,
-  .jm td {
+  .jm-anlass,
+  .jm-persona p,
+  .jm-tiefpunkt {
     font-size: 9pt;
-    padding: 1.5mm 2mm;
   }
-  .map-stempel {
-    font-size: 9pt;
-    margin-bottom: 2mm;
+  .jm-kopf {
+    grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
   }
-  .map-titel {
-    font-size: 16pt;
-    margin-bottom: 2mm;
+  .jm-kachel dd {
+    font-size: 14pt;
   }
-  .map-eckdaten {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    max-width: none;
-    font-size: 9pt;
-    margin-bottom: 4mm;
-  }
-  .map-eckdaten dt {
+  .jm-spur-titel {
+    position: static;
     font-size: 7pt;
   }
-  .map-legende,
-  .map-quellen,
-  .map-fuss {
+  .jm-karte p,
+  .jm-tp,
+  .jm-gedanke,
+  .jm-pp,
+  .jm-intern,
+  .jm-zitat {
     font-size: 8pt;
-    margin-top: 2mm;
   }
-  .map-quellen h2 {
-    font-size: 10pt;
-    margin: 0;
+  .jm-kurve {
+    padding-block: 5mm;
   }
-  .jm tr,
-  .map-quellen li {
+  .jm-kurve-flaeche {
+    height: 22mm;
+  }
+  .jm-karte {
+    box-shadow: none;
+  }
+  .jm-fuss {
+    font-size: 7.5pt;
+  }
+  .jm-zelle,
+  .jm-quellen li {
     break-inside: avoid;
   }
 }

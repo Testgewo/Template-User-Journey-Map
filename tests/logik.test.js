@@ -273,3 +273,19 @@ test('ältere Dateien ohne Quelle und internen Ablauf je Schritt lassen sich lad
   assert.equal(r.map.schritte[0].intern, '');
   assert.equal(P.pruefen(r.map).vollstaendig, true);
 });
+
+test('Kennzahlen: Tief- und Höhepunkt der Emotionskurve', () => {
+  const m = vollstaendigeMap();
+  const kz = M.kennzahlen(m);
+  assert.equal(kz.schritte, 7);
+  assert.equal(kz.painPoints, 5);
+  assert.equal(kz.touchpoints, 7);
+  assert.equal(kz.tiefpunkt.nr, 6);
+  assert.equal(kz.tiefpunkt.emotion, -2);
+  assert.equal(kz.tiefpunkt.phase, 'Weiterleitung und Abschluss');
+  assert.equal(kz.hoehepunkt.nr, 7);
+  // nur neutrale Emotionen: kein Tief- und kein Höhepunkt
+  for (const s of m.schritte) s.emotion = 0;
+  assert.equal(M.kennzahlen(m).tiefpunkt, null);
+  assert.equal(M.kennzahlen(m).hoehepunkt, null);
+});
